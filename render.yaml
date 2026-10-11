@@ -1,0 +1,24 @@
+# Render Blueprint (https://render.com): despliega el backend de PaqRap como contenedor Docker
+# para pruebas, gratis. El servicio sirve la API y tambien el visualizador en su propia URL;
+# esa URL es la que se pone en BACKEND_URL del proyecto de Vercel.
+#
+# Si el repositorio tiene como raiz la carpeta que contiene "Resultado", descomente rootDir.
+services:
+  - type: web
+    name: paqrap-backend
+    runtime: docker
+    plan: free
+    # rootDir: Resultado
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/salud
+    autoDeploy: true
+    envVars:
+      - key: PAQRAP_DATOS_DIR
+        value: /tmp/paqrap
+      - key: PAQRAP_CORS_ORIGENES
+        value: "*"
+      - key: JAVA_OPTS
+        value: -XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Dfile.encoding=UTF-8
+      - key: TZ
+        value: America/Lima

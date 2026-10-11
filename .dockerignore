@@ -1,0 +1,13 @@
+**/node_modules
+**/.next
+**/out
+**/.vercel
+backend/target
+datos-app
+datos-externos
+logs
+dist
+**/*.log
+.git
+.vscode
+.idea

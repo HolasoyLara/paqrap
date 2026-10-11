@@ -1,0 +1,280 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  PaqRap en AWS - contenedor unico (API Spring Boot + visualizador) en ECS Fargate detras de un
+  Application Load Balancer, con su propia VPC de dos subredes publicas. Una sola tarea, porque la
+  corrida visual es compartida por todos los dispositivos y vive en memoria del servicio.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Imagen en ECR (por ejemplo 123456789012.dkr.ecr.us-east-1.amazonaws.com/paqrap:20261010120000)
+  NombreServicio:
+    Type: String
+    Default: paqrap
+    AllowedPattern: "[a-z][a-z0-9-]{1,30}"
+  ContainerCpu:
+    Type: Number
+    Default: 1024
+    AllowedValues: [512, 1024, 2048, 4096]
+    Description: CPU de la tarea (1024 = 1 vCPU)
+  ContainerMemory:
+    Type: Number
+    Default: 2048
+    AllowedValues: [1024, 2048, 3072, 4096, 8192]
+    Description: Memoria de la tarea en MiB
+  CorsOrigenes:
+    Type: String
+    Default: "*"
+    Description: Origenes permitidos para llamar a la API (por ejemplo https://paqrap.vercel.app)
+  CertificadoArn:
+    Type: String
+    Default: ""
+    Description: (Opcional) ARN de un certificado de ACM para publicar tambien por HTTPS (puerto 443)
+  DatasourceUrl:
+    Type: String
+    Default: ""
+    Description: (Opcional) JDBC de PostgreSQL/RDS para persistir el historial; vacio = H2 dentro del contenedor
+  DatasourceUsuario:
+    Type: String
+    Default: ""
+  DatasourceClave:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+Conditions:
+  TieneCertificado: !Not [!Equals [!Ref CertificadoArn, ""]]
+  UsaRds: !Not [!Equals [!Ref DatasourceUrl, ""]]
+
+Resources:
+  # ---------------- Red ----------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.40.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-vpc" }]
+
+  PuertaInternet:
+    Type: AWS::EC2::InternetGateway
+
+  AdjuntoPuerta:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref PuertaInternet
+
+  SubredPublica1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-publica-1" }]
+
+  SubredPublica2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-publica-2" }]
+
+  TablaRutas:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  RutaInternet:
+    Type: AWS::EC2::Route
+    DependsOn: AdjuntoPuerta
+    Properties:
+      RouteTableId: !Ref TablaRutas
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref PuertaInternet
+
+  AsociacionSubred1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubredPublica1
+      RouteTableId: !Ref TablaRutas
+
+  AsociacionSubred2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubredPublica2
+      RouteTableId: !Ref TablaRutas
+
+  # ---------------- Seguridad ----------------
+  GrupoBalanceador:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Acceso publico al balanceador de PaqRap
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+
+  GrupoServicio:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Trafico del balanceador al contenedor de PaqRap
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref GrupoBalanceador
+
+  # ---------------- Balanceador ----------------
+  Balanceador:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${NombreServicio}-alb"
+      Scheme: internet-facing
+      Type: application
+      Subnets: [!Ref SubredPublica1, !Ref SubredPublica2]
+      SecurityGroups: [!Ref GrupoBalanceador]
+      LoadBalancerAttributes:
+        - { Key: idle_timeout.timeout_seconds, Value: "120" }
+
+  GrupoDestino:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${NombreServicio}-tg"
+      VpcId: !Ref Vpc
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /api/salud
+      HealthCheckIntervalSeconds: 20
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher: { HttpCode: "200" }
+      TargetGroupAttributes:
+        - { Key: deregistration_delay.timeout_seconds, Value: "15" }
+
+  EscuchaHttp:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Balanceador
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GrupoDestino
+
+  EscuchaHttps:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: TieneCertificado
+    Properties:
+      LoadBalancerArn: !Ref Balanceador
+      Port: 443
+      Protocol: HTTPS
+      Certificates: [{ CertificateArn: !Ref CertificadoArn }]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GrupoDestino
+
+  # ---------------- ECS ----------------
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${NombreServicio}-cluster"
+
+  Bitacoras:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${NombreServicio}"
+      RetentionInDays: 14
+
+  RolEjecucion:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  DefinicionTarea:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref NombreServicio
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt RolEjecucion.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: paqrap
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - { ContainerPort: 8080, Protocol: tcp }
+          Environment:
+            - { Name: PAQRAP_DATOS_DIR, Value: /tmp/paqrap }
+            - { Name: PAQRAP_CORS_ORIGENES, Value: !Ref CorsOrigenes }
+            - { Name: TZ, Value: America/Lima }
+            - { Name: JAVA_OPTS, Value: "-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Dfile.encoding=UTF-8" }
+            - !If
+              - UsaRds
+              - { Name: SPRING_DATASOURCE_URL, Value: !Ref DatasourceUrl }
+              - !Ref AWS::NoValue
+            - !If
+              - UsaRds
+              - { Name: SPRING_DATASOURCE_USERNAME, Value: !Ref DatasourceUsuario }
+              - !Ref AWS::NoValue
+            - !If
+              - UsaRds
+              - { Name: SPRING_DATASOURCE_PASSWORD, Value: !Ref DatasourceClave }
+              - !Ref AWS::NoValue
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref Bitacoras
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: paqrap
+
+  Servicio:
+    Type: AWS::ECS::Service
+    DependsOn: EscuchaHttp
+    Properties:
+      ServiceName: !Ref NombreServicio
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref DefinicionTarea
+      HealthCheckGracePeriodSeconds: 180
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref SubredPublica1, !Ref SubredPublica2]
+          SecurityGroups: [!Ref GrupoServicio]
+      LoadBalancers:
+        - ContainerName: paqrap
+          ContainerPort: 8080
+          TargetGroupArn: !Ref GrupoDestino
+
+Outputs:
+  UrlAplicacion:
+    Description: URL publica de PaqRap (visualizador y API)
+    Value: !If
+      - TieneCertificado
+      - !Sub "https://${Balanceador.DNSName}"
+      - !Sub "http://${Balanceador.DNSName}"
+  UrlSalud:
+    Description: Verificacion de salud del servicio
+    Value: !Sub "http://${Balanceador.DNSName}/api/salud"
