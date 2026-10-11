@@ -10,29 +10,33 @@ import PantallaParametros from '@/components/PantallaParametros';
 import PantallaPanorama from '@/components/PantallaPanorama';
 import PantallaCierre from '@/components/PantallaCierre';
 import PantallaPedidos from '@/components/PantallaPedidos';
-import PantallaExperimentacion from '@/components/PantallaExperimentacion';
 import ModalDetalle from '@/components/ModalDetalle';
 import Toasts, { type AvisoLocal } from '@/components/Toasts';
 import type { Seleccion } from '@/components/MapaOperacion';
 
-type Pestana = 'parametros' | 'panorama' | 'cierre' | 'pedidos' | 'experimentos';
+type Pestana = 'parametros' | 'panorama' | 'cierre' | 'pedidos';
 
 const PESTANAS: [Pestana, string][] = [
   ['parametros', '1 · Parámetros'],
   ['panorama', '2 · Panorama'],
   ['cierre', '3 · Cierre'],
   ['pedidos', '4 · Pedidos'],
-  ['experimentos', '5 · Experimentación'],
 ];
+
+/** Semilla fija de la corrida (la misma que el valor por defecto del backend). Ya no se configura desde la pantalla. */
+const SEMILLA_FIJA = 20260902;
+/** Algoritmo de ruteo fijo: el Algoritmo Genetico (GA). Ya no se configura desde la pantalla. */
+const ALGORITMO_FIJO = 'GA' as const;
 
 function formularioInicial(c: Configuracion): ParametrosCorrida {
   const p = c.parametrosPorDefecto;
-  const ga = c.algoritmos.find((a) => a.id === 'GA');
+  const ga = c.algoritmos.find((a) => a.id === ALGORITMO_FIJO);
   const esc5d = c.escenarios.find((e) => e.id === 'SIMULACION_5D');
   return {
     ...p,
     escenario: 'SIMULACION_5D',
-    algoritmo: 'GA',
+    algoritmo: ALGORITMO_FIJO,
+    semilla: SEMILLA_FIJA,
     fechaInicio: aInputFecha(esc5d?.fechaInicioPorDefecto ?? '2026-09-01T00:00'),
     umbrales: { verde: c.umbrales.verde, ambar: c.umbrales.ambar },
     parametrosAlgoritmo: { ...(ga?.parametros ?? {}) },
@@ -47,8 +51,7 @@ function conSegundos(f: string | null): string | null {
 
 /**
  * PaqRap · Visualizador. Una sola pagina con las pantallas del prototipo v04
- * (V-1 Parametros, V-2 Panorama, V-3 Cierre) mas Pedidos (Modulo A) y
- * Experimentacion (B23). Todos los dispositivos ven la misma corrida; la zona,
+ * (V-1 Parametros, V-2 Panorama, V-3 Cierre) mas Pedidos (Modulo A). Todos los dispositivos ven la misma corrida; la zona,
  * el zoom, los filtros y la seleccion son locales a cada uno (C5, C6).
  */
 export default function Pagina() {
@@ -253,7 +256,6 @@ export default function Pagina() {
         {pestana === 'pedidos' && (
           <PantallaPedidos estado={estado} onAbrir={setSeleccion} onAviso={aviso} onIrAParametros={() => setPestana('parametros')} />
         )}
-        {pestana === 'experimentos' && <PantallaExperimentacion onAviso={aviso} />}
       </main>
 
       {seleccion && estado && (

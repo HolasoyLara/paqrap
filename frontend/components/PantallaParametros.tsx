@@ -56,9 +56,9 @@ export default function PantallaParametros(props: Props) {
     <section>
       <h2>Parámetros de la corrida</h2>
       <p className="note">
-        Elige el escenario de la corrida (día a día, simulación del periodo o colapso logístico), el algoritmo del planificador y
-        la semilla. Misma semilla + mismos archivos = misma corrida. El escenario y el algoritmo quedan fijos una vez iniciada la
-        corrida; los umbrales del semáforo se pueden ajustar en cualquier momento.
+        Elige el escenario de la corrida (día a día, simulación del periodo o colapso logístico) y la fecha de inicio. El planificador
+        es el Algoritmo Genético (GA) y la semilla es fija, así que misma fecha + mismos archivos = misma corrida. El escenario queda
+        fijo una vez iniciada la corrida; los umbrales del semáforo se pueden ajustar en cualquier momento.
       </p>
       {bloqueado && <div className="banner banner-info">Hay una corrida en curso: los parámetros quedan fijos hasta detenerla (excepto los umbrales del semáforo).</div>}
 
@@ -115,18 +115,6 @@ export default function PantallaParametros(props: Props) {
             }}>
               {config.escenarios.map((e) => <option key={e.id} value={e.id}>{e.etiqueta}</option>)}
             </select>
-          </label>
-          <label>Algoritmo de ruteo
-            <select value={form.algoritmo} disabled={bloqueado} onChange={(e) => {
-              const id = e.target.value as ParametrosCorrida['algoritmo'];
-              const alg = config.algoritmos.find((a) => a.id === id);
-              setForm({ ...form, algoritmo: id, parametrosAlgoritmo: { ...(alg?.parametros ?? {}) } });
-            }}>
-              {config.algoritmos.map((a) => <option key={a.id} value={a.id}>{a.etiqueta}</option>)}
-            </select>
-          </label>
-          <label>Semilla numérica (reproducibilidad)
-            <input type="number" value={form.semilla} disabled={bloqueado} onChange={(e) => set('semilla', Number(e.target.value))} />
           </label>
           <label>Fecha/hora de inicio {form.escenario === 'TIEMPO_REAL' && <span className="hint">(por defecto, ahora en Lima)</span>}
             <input type="datetime-local" value={form.fechaInicio ?? ''} disabled={bloqueado} onChange={(e) => set('fechaInicio', e.target.value)} />

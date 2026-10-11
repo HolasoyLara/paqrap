@@ -9,7 +9,6 @@ import type {
   DetallePedido,
   DetalleVehiculo,
   EstadoVisual,
-  Experimento,
   FilaPedido,
   ParametrosCorrida,
   ResumenArchivo,
@@ -106,16 +105,10 @@ export const api = {
 
   corridas: () => pedir<CorridaHistorial[]>('/api/corridas'),
   cierreCorrida: (id: string) => pedir<CierreCorrida>(`/api/corridas/${encodeURIComponent(id)}`),
-
-  experimentos: () =>
-    pedir<{ id: string; estado: string; descripcion: string; creadoMs: number; progreso: number }[]>('/api/experimentos'),
-  experimento: (id: string) => pedir<Experimento>(`/api/experimentos/${encodeURIComponent(id)}`),
-  lanzarExperimento: (s: Record<string, unknown>) => pedir<Experimento>('/api/experimentos', json('POST', s)),
 };
 
 export const enlaces = {
   cierreCsv: () => `${BASE_API}/api/simulacion/cierre/csv`,
   corridaCsv: (id: string) => `${BASE_API}/api/corridas/${encodeURIComponent(id)}/csv`,
   pedidosCsv: () => `${BASE_API}/api/pedidos/exportar`,
-  experimentoCsv: (id: string) => `${BASE_API}/api/experimentos/${encodeURIComponent(id)}/csv`,
 };

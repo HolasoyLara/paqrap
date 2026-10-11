@@ -268,11 +268,6 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
             <a className="btn btn-primary" href={deHistorial ? enlaces.corridaCsv(cierre.idCorrida) : enlaces.cierreCsv()}>Exportar reporte (CSV / hoja de cálculo)</a>
             <span className="hint">D22: el CSV se abre directamente en Excel.</span>
           </div>
-          <div className="isa-note">
-            Este cierre alimenta el <b>Informe de Selección de Algoritmos (ISA)</b>, que compara el desempeño de las dos metaheurísticas del
-            Planificador: {ALGORITMO.ACO} y {ALGORITMO.GA}. La pestaña «Experimentación» corre ambas sobre las mismas instancias y aplica
-            la prueba t pareada.
-          </div>
         </>
       )}
 
