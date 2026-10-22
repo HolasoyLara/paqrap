@@ -64,7 +64,8 @@ public class FuenteDatos {
 
     /** Resumen de un archivo para la pantalla V-1. */
     public record ResumenArchivo(String tipo, String nombre, String descripcion, int registros, int lineas, int errores,
-                                 boolean valido, boolean personalizado, List<ResultadoLectura.ErrorLinea> detalleErrores) {
+                                 boolean valido, boolean personalizado, List<ResultadoLectura.ErrorLinea> detalleErrores,
+                                 String advertencia) {
     }
 
     private final int anchoKm = 70;
@@ -271,6 +272,7 @@ public class FuenteDatos {
         List<ResultadoLectura.ErrorLinea> detalle = new ArrayList<>();
         double h0 = ConversorTiempo.aHoras(inicio);
         double h1 = escenario == Escenario.SIMULACION_5D ? h0 + dias * 24.0 : Double.POSITIVE_INFINITY;
+        List<Double> ventasDelPeriodo = new ArrayList<>();
         for (YearMonth m : meses) {
             ArchivoSubido<RegistroVenta> p = ventasPersonalizadas.get(m);
             ResultadoLectura<RegistroVenta> l = p != null ? p.lectura() : ventasPublicadas(m);
@@ -279,7 +281,10 @@ public class FuenteDatos {
             double base = ConversorTiempo.inicioDeMes(m);
             for (RegistroVenta r : l.getRegistros()) {
                 double h = base + r.horasDesdeInicioDeMes();
-                if (h >= h0 && h < h1) pedidosPeriodo++;
+                if (h >= h0 && h < h1) {
+                    pedidosPeriodo++;
+                    ventasDelPeriodo.add(h);
+                }
             }
             lineas += l.getLineasLeidas();
             errores += l.getTotalErrores();
@@ -292,7 +297,7 @@ public class FuenteDatos {
                 ? "Pedidos desde la fecha de inicio, mes a mes, hasta el colapso (" + pedidosPeriodo + " en los 2 primeros meses)"
                 : "Pedidos llegan en tiempo real desde la fecha de inicio (" + pedidosPeriodo + " en los 2 primeros meses) + registro manual");
         lista.add(new ResumenArchivo("ventas", String.join(", ", nombres), descPedidos, pedidosPeriodo, lineas, errores,
-                valido, personalizado, limitar(detalle)));
+                valido, personalizado, limitar(detalle), advertenciaDiasSinPedidos(escenario, ventasDelPeriodo, h0, dias)));
 
         // Bloqueos
         int bloqueosPeriodo = 0;
@@ -318,26 +323,43 @@ public class FuenteDatos {
         }
         lista.add(new ResumenArchivo("bloqueos", String.join(", ", nombres),
                 bloqueosPeriodo + " bloqueos de calles " + (escenario == Escenario.SIMULACION_5D ? "en el periodo" : "en los 2 primeros meses"),
-                bloqueosPeriodo, lineas, errores, true, personalizado, limitar(detalle)));
+                bloqueosPeriodo, lineas, errores, true, personalizado, limitar(detalle), null));
 
         // Mantenimiento
         ArchivoSubido<RegistroMantenimiento> mp = mantenimientoPersonalizado;
         ResultadoLectura<RegistroMantenimiento> ml = mp != null ? mp.lectura() : mantenimientoPublicado();
         lista.add(new ResumenArchivo("mantenimiento", mp != null ? mp.nombre() : "mant.preventivo.09.10",
                 ml.getRegistros().size() + " mantenimientos preventivos (plan bimestral, se repite cada 2 meses)",
-                ml.getRegistros().size(), ml.getLineasLeidas(), ml.getTotalErrores(), ml.esValido(), mp != null, limitar(ml.getErrores())));
+                ml.getRegistros().size(), ml.getLineasLeidas(), ml.getTotalErrores(), ml.esValido(), mp != null, limitar(ml.getErrores()), null));
 
         // Averias
         ArchivoSubido<RegistroAveria> ap = averiasPersonalizadas;
         if (ap != null) {
             lista.add(new ResumenArchivo("averias", ap.nombre(), ap.lectura().getRegistros().size() + " averías programadas (archivo)",
                     ap.lectura().getRegistros().size(), ap.lectura().getLineasLeidas(), ap.lectura().getTotalErrores(),
-                    ap.lectura().esValido(), true, limitar(ap.lectura().getErrores())));
+                    ap.lectura().esValido(), true, limitar(ap.lectura().getErrores()), null));
         } else {
             lista.add(new ResumenArchivo("averias", "averías programadas",
-                    "Se generan con la semilla de la corrida (tasa configurable por día)", 0, 0, 0, true, false, List.of()));
+                    "Se generan con la semilla de la corrida (tasa configurable por día)", 0, 0, 0, true, false, List.of(), null));
         }
         return lista;
+    }
+
+    /** Avisa si algun dia del periodo de 5 dias no tiene ningun pedido (p. ej. el 30/09 en los datos publicados). */
+    private static String advertenciaDiasSinPedidos(Escenario escenario, List<Double> horasDePedidos, double h0, int dias) {
+        if (escenario != Escenario.SIMULACION_5D) return null;
+        double inicioDia = Math.floor(h0 / 24.0) * 24.0;
+        List<String> vacios = new ArrayList<>();
+        for (int d = 0; d <= dias; d++) {
+            double desde = Math.max(h0, inicioDia + d * 24.0);
+            double hasta = Math.min(h0 + dias * 24.0, inicioDia + (d + 1) * 24.0);
+            if (hasta <= desde) continue;
+            boolean hay = false;
+            for (double h : horasDePedidos) if (h >= desde && h < hasta) { hay = true; break; }
+            if (!hay) vacios.add(ConversorTiempo.formatear(desde).substring(0, 5));
+        }
+        if (vacios.isEmpty()) return null;
+        return "Sin pedidos el " + String.join(", ", vacios) + ". Suba el archivo de ventas de ese mes si esos días deben tener pedidos.";
     }
 
     private static List<ResultadoLectura.ErrorLinea> limitar(List<ResultadoLectura.ErrorLinea> errores) {

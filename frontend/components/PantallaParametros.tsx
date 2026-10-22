@@ -76,6 +76,7 @@ export default function PantallaParametros(props: Props) {
                     <div className="file-meta">
                       {a.descripcion}{a.errores > 0 ? ` · ${a.errores} línea(s) con formato inválido omitidas` : ''}
                     </div>
+                    {a.advertencia && <div className="file-meta" style={{ color: 'var(--amber)', fontWeight: 600 }}>⚠ {a.advertencia}</div>}
                   </div>
                   <div className="file-actions">
                     <span className={'badge ' + (a.valido ? 'badge-ok' : 'badge-error')}>

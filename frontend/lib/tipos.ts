@@ -286,6 +286,7 @@ export interface ResumenArchivo {
   valido: boolean;
   personalizado: boolean;
   detalleErrores: { numeroLinea: number; contenido: string; motivo: string }[];
+  advertencia?: string | null;
 }
 
 export interface CierreCorrida {
