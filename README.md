@@ -267,6 +267,7 @@ Vercel solo ejecuta el visualizador Next.js; **la API Java se publica aparte** (
 - **Tiempo:** 2-3 minutos la pila y 10-15 minutos la compilación dentro de la instancia. Revise `http://<dns>/api/salud`.
 - **Costo:** una instancia `t3.small` encendida. Para pausar, detenga la instancia desde la consola de EC2; al volver a encenderla, la IP pública cambia.
 - **Eliminar:** `aws cloudformation delete-stack --stack-name paqrap-ec2`.
+- **URL fija con DuckDNS (opcional):** cree una cuenta en duckdns.org, un subdominio (p. ej. `paqrap`) y copie su *token*. Despliegue con `-DuckDnsSubdominio paqrap -DuckDnsToken <token>` (o con las variables `DUCKDNS_SUBDOMINIO` y `DUCKDNS_TOKEN` en el `.sh`). La instancia usa una IP elástica y apunta el nombre a su IP al arrancar y cada 5 minutos, así que `http://paqrap.duckdns.org` sigue valiendo después de detener y encender la instancia o de borrar y volver a crear la pila. Es HTTP, sin certificado.
 
 **Opción B: una instancia EC2 con Docker Compose (manual).**
 

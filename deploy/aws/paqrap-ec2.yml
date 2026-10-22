@@ -32,6 +32,16 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
     Description: AMI de Amazon Linux 2023 (se toma la mas reciente desde SSM; no la cambie salvo que sepa lo que hace)
+  DuckDnsSubdominio:
+    Type: String
+    Default: ""
+    Description: (Opcional) Subdominio de DuckDNS (solo el nombre, p. ej. paqrap para paqrap.duckdns.org). Vacio = sin nombre fijo.
+    AllowedPattern: "[a-z0-9-]*"
+  DuckDnsToken:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: (Opcional) Token de su cuenta de DuckDNS; la instancia lo usa para apuntar el nombre a su IP al arrancar.
   CidrSsh:
     Type: String
     Default: ""
@@ -39,6 +49,7 @@ Parameters:
 
 Conditions:
   TieneSsh: !Not [!Equals [!Ref CidrSsh, ""]]
+  TieneDuckDns: !Not [!Equals [!Ref DuckDnsSubdominio, ""]]
 
 Resources:
   # ---------------- Red ----------------
@@ -155,8 +166,36 @@ Resources:
           # La API y el visualizador comparten el puerto 8080 del contenedor; se publica en el 80.
           sed -i 's/"8080:8080"/"80:8080"/' docker-compose.yml
 
+          # Nombre fijo (DuckDNS): se apunta a la IP de esta instancia ahora y cada 5 minutos
+          if [ -n "${DuckDnsSubdominio}" ] && [ -n "${DuckDnsToken}" ]; then
+            cat > /usr/local/bin/duckdns-actualizar.sh <<'EOS'
+          #!/bin/bash
+          curl -fsS -m 20 "https://www.duckdns.org/update?domains=${DuckDnsSubdominio}&token=${DuckDnsToken}&ip=" >> /var/log/duckdns.log 2>&1 || true
+          echo >> /var/log/duckdns.log
+          EOS
+            chmod 700 /usr/local/bin/duckdns-actualizar.sh
+            /usr/local/bin/duckdns-actualizar.sh
+            dnf install -y cronie
+            systemctl enable --now crond
+            echo '*/5 * * * * root /usr/local/bin/duckdns-actualizar.sh' > /etc/cron.d/duckdns
+          fi
+
           # Solo el servicio backend: su imagen ya incluye el visualizador (no hace falta compilar Next.js dos veces).
           docker compose up -d --build backend
+
+  # IP fija: no cambia al detener y volver a encender la instancia
+  IpElastica:
+    Type: AWS::EC2::EIP
+    DependsOn: AdjuntoPuerta
+    Properties:
+      Domain: vpc
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-ip" }]
+
+  AsociacionIp:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt IpElastica.AllocationId
+      InstanceId: !Ref Instancia
 
 Outputs:
   IdInstancia:
@@ -164,7 +203,11 @@ Outputs:
     Value: !Ref Instancia
   UrlAplicacion:
     Description: URL publica de PaqRap (visualizador y API)
-    Value: !Sub "http://${Instancia.PublicDnsName}"
+    Value: !Sub "http://${IpElastica.PublicIp}"
+  UrlFija:
+    Condition: TieneDuckDns
+    Description: URL fija con el nombre de DuckDNS
+    Value: !Sub "http://${DuckDnsSubdominio}.duckdns.org"
   UrlSalud:
     Description: Verificacion de salud del servicio
-    Value: !Sub "http://${Instancia.PublicDnsName}/api/salud"
+    Value: !Sub "http://${IpElastica.PublicIp}/api/salud"

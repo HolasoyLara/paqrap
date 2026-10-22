@@ -15,6 +15,8 @@
     -Rama main                                       (rama a desplegar)
     -CarpetaProyecto .                               (carpeta con backend/ y docker-compose.yml)
     -TipoInstancia t3.small  -Region us-east-1  -Pila paqrap-ec2  -CidrSsh 203.0.113.10/32
+    -DuckDnsSubdominio paqrap -DuckDnsToken <token>  (URL fija http://paqrap.duckdns.org; el token tambien puede ir en
+                                                      la variable DUCKDNS_TOKEN y el nombre en DUCKDNS_SUBDOMINIO)
     -SinEspera                                       (no esperar a que la aplicacion responda)
 #>
 param(
@@ -26,6 +28,8 @@ param(
     [string]$Region = $(if ($env:AWS_REGION) { $env:AWS_REGION } elseif ($env:AWS_DEFAULT_REGION) { $env:AWS_DEFAULT_REGION } else { 'us-east-1' }),
     [string]$Pila = 'paqrap-ec2',
     [string]$CidrSsh = '',
+    [string]$DuckDnsSubdominio = $env:DUCKDNS_SUBDOMINIO,
+    [string]$DuckDnsToken = $env:DUCKDNS_TOKEN,
     [switch]$SinEspera
 )
 
@@ -75,6 +79,15 @@ $parametros = @(
     "TipoInstancia=$TipoInstancia"
 )
 if ($CidrSsh) { $parametros += "CidrSsh=$CidrSsh" }
+if ($DuckDnsSubdominio -and $DuckDnsToken) {
+    $DuckDnsSubdominio = ($DuckDnsSubdominio.Trim().ToLower() -replace '\.duckdns\.org$', '')
+    $parametros += "DuckDnsSubdominio=$DuckDnsSubdominio"
+    $parametros += "DuckDnsToken=$($DuckDnsToken.Trim())"
+    Write-Host "URL fija: http://$DuckDnsSubdominio.duckdns.org" -ForegroundColor Gray
+} elseif ($DuckDnsSubdominio -or $DuckDnsToken) {
+    Write-Host 'Para la URL fija indique -DuckDnsSubdominio y -DuckDnsToken (los dos).' -ForegroundColor Red
+    exit 1
+}
 
 Ejecutar "Creando/actualizando la pila $Pila (tarda 2-3 minutos; la app tarda 10-15 minutos mas en compilarse)" {
     aws cloudformation deploy --region $Region --stack-name $Pila `
@@ -103,4 +116,5 @@ if (-not $SinEspera) {
 }
 Write-Host "Salud: $url/api/salud"
 Write-Host "Para el visualizador en Vercel use BACKEND_URL=$url"
+if ($DuckDnsSubdominio -and $DuckDnsToken) { Write-Host "URL fija (puede tardar 1-2 minutos en resolver): http://$DuckDnsSubdominio.duckdns.org" -ForegroundColor Green }
 Write-Host "Para borrar todo: aws cloudformation delete-stack --region $Region --stack-name $Pila"
