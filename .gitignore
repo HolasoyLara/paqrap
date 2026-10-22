@@ -1,0 +1,17 @@
+# Salidas de compilacion (se regeneran con COMPILAR.bat / scripts/linux/compilar.sh o con Docker)
+backend/target/
+dist/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# Datos y bitacoras de ejecucion local (los scripts usan %LOCALAPPDATA%\PaqRap o ~/.local/share/paqrap)
+datos-app/
+datos-externos/
+logs/
+
+# Editores
+.idea/
+.vscode/
+*.iml

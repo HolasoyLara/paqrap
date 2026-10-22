@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  PaqRap en una sola instancia EC2 (Amazon Linux 2023) con Docker. La instancia clona el repositorio
+  de GitHub y construye la imagen ella misma, asi que no hace falta Docker ni AWS CLI en su PC para
+  el servidor. No crea roles IAM ni balanceador: pensado para una cuenta de estudiante (menor costo).
+
+Parameters:
+  NombreServicio:
+    Type: String
+    Default: paqrap
+    AllowedPattern: "[a-z][a-z0-9-]{1,30}"
+  RepoUrl:
+    Type: String
+    Description: URL HTTPS del repositorio en GitHub (debe ser publico), por ejemplo https://github.com/usuario/paqrap.git
+    AllowedPattern: "https://github\\.com/.+"
+  CarpetaProyecto:
+    Type: String
+    Default: "."
+    Description: Carpeta del repositorio que contiene backend/ y docker-compose.yml. "." si es la raiz del repositorio.
+    AllowedPattern: "[A-Za-z0-9._/-]+"
+  Rama:
+    Type: String
+    Default: main
+    Description: Rama del repositorio que se despliega.
+    AllowedPattern: "[A-Za-z0-9._/-]+"
+  TipoInstancia:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+    Description: t3.small (2 GB) recomendado. t3.micro (1 GB) puede quedarse sin memoria al compilar.
+  ImagenAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: AMI de Amazon Linux 2023 (se toma la mas reciente desde SSM; no la cambie salvo que sepa lo que hace)
+  CidrSsh:
+    Type: String
+    Default: ""
+    Description: (Opcional) CIDR que puede entrar por SSH (puerto 22), por ejemplo 203.0.113.10/32. Vacio = sin SSH.
+
+Conditions:
+  TieneSsh: !Not [!Equals [!Ref CidrSsh, ""]]
+
+Resources:
+  # ---------------- Red ----------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.50.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-vpc" }]
+
+  PuertaInternet:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-igw" }]
+
+  AdjuntoPuerta:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref PuertaInternet
+
+  Subred:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.50.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${NombreServicio}-publica" }]
+
+  TablaRutas:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  RutaInternet:
+    Type: AWS::EC2::Route
+    DependsOn: AdjuntoPuerta
+    Properties:
+      RouteTableId: !Ref TablaRutas
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref PuertaInternet
+
+  AsociacionSubred:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subred
+      RouteTableId: !Ref TablaRutas
+
+  # ---------------- Seguridad ----------------
+  GrupoSeguridad:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Acceso web publico a PaqRap (y SSH opcional)
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - !If
+          - TieneSsh
+          - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref CidrSsh }
+          - !Ref AWS::NoValue
+
+  # ---------------- Servidor ----------------
+  Instancia:
+    Type: AWS::EC2::Instance
+    DependsOn: RutaInternet
+    Properties:
+      ImageId: !Ref ImagenAmi
+      InstanceType: !Ref TipoInstancia
+      NetworkInterfaces:
+        - DeviceIndex: "0"
+          SubnetId: !Ref Subred
+          GroupSet: [!Ref GrupoSeguridad]
+          AssociatePublicIpAddress: true
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeSize: 20, VolumeType: gp3, DeleteOnTermination: true }
+      Tags:
+        - { Key: Name, Value: !Sub "${NombreServicio}-ec2" }
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Arranque de PaqRap: se ejecuta una sola vez al crear la instancia.
+          # El progreso queda en /var/log/cloud-init-output.log dentro de la instancia.
+          set -euxo pipefail
+
+          REPO_URL="${RepoUrl}"
+          CARPETA="${CarpetaProyecto}"
+          RAMA="${Rama}"
+
+          # Memoria de respaldo: la compilacion de Maven y Next.js puede pasar de 2 GB.
+          if [ ! -f /swapfile ]; then
+            dd if=/dev/zero of=/swapfile bs=1M count=2048
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+          fi
+
+          dnf install -y docker git
+          systemctl enable --now docker
+
+          # Docker Compose v2 como plugin
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-$(uname -m)" \
+            -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+          cd /opt
+          git clone --branch "$RAMA" --single-branch --depth 1 "$REPO_URL" paqrap
+          cd "paqrap/$CARPETA"
+
+          # La API y el visualizador comparten el puerto 8080 del contenedor; se publica en el 80.
+          sed -i 's/"8080:8080"/"80:8080"/' docker-compose.yml
+
+          # Solo el servicio backend: su imagen ya incluye el visualizador (no hace falta compilar Next.js dos veces).
+          docker compose up -d --build backend
+
+Outputs:
+  IdInstancia:
+    Description: ID de la instancia EC2 (para detenerla o iniciarla desde la consola)
+    Value: !Ref Instancia
+  UrlAplicacion:
+    Description: URL publica de PaqRap (visualizador y API)
+    Value: !Sub "http://${Instancia.PublicDnsName}"
+  UrlSalud:
+    Description: Verificacion de salud del servicio
+    Value: !Sub "http://${Instancia.PublicDnsName}/api/salud"

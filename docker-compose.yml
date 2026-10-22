@@ -1,0 +1,43 @@
+# PaqRap con Docker: backend (API + visualizador estatico) en http://localhost:8080 y
+# visualizador Next.js (servidor Node) en http://localhost:3000.
+#   docker compose up -d --build        (o INICIAR-DOCKER.bat)
+#   docker compose down                 (o DETENER-DOCKER.bat)
+name: paqrap
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: paqrap-backend:1.0.0
+    ports:
+      - "8080:8080"
+    environment:
+      PAQRAP_DATOS_DIR: /data
+      PAQRAP_CORS_ORIGENES: "*"
+      TZ: America/Lima
+    volumes:
+      - paqrap-datos:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/salud"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8080
+    image: paqrap-frontend:1.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  paqrap-datos:
