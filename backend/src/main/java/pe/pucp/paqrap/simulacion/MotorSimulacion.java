@@ -1371,8 +1371,14 @@ public class MotorSimulacion {
 
             List<EstadoVisual.AlmacenVisual> listaAlmacenes = new ArrayList<>();
             for (Almacen a : almacenes) {
+                // unidades en ruta que regresan a este almacen, con su hora estimada de llegada
+                List<String> arriban = new ArrayList<>();
+                for (VehiculoSim vs : vehiculos) {
+                    RutaEnCurso r = vs.getRuta();
+                    if (r != null && r.getAlmacenRetorno() == a) arriban.add(vs.getId() + " · " + fecha(r.getHoraRegreso()));
+                }
                 listaAlmacenes.add(new EstadoVisual.AlmacenVisual(a.getIdAlmacen(), a.getNombre(), a.getUbicacion().x(), a.getUbicacion().y(),
-                        a.esCentral(), a.esCentral() ? null : a.getCapacidad(), a.esCentral() ? null : a.getInventarioActual()));
+                        a.esCentral(), a.esCentral() ? null : a.getCapacidad(), a.esCentral() ? null : a.getInventarioActual(), arriban));
             }
 
             List<EstadoVisual.VehiculoVisual> listaVehiculos = new ArrayList<>();

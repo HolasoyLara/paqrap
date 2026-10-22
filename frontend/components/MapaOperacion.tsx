@@ -450,6 +450,9 @@ export default function MapaOperacion(props: Props) {
               <text y={27} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0a2c43" stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
                 {a.nombre}
               </text>
+              <text y={39} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={color} stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
+                {a.capacidad == null ? 'Stock: sin límite' : `Stock ${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(pct ?? 0)} %)`}
+              </text>
               {n > 0 && (
                 <g transform="translate(14,-14)">
                   <circle r={8} fill="#fff" stroke={NAVY} strokeWidth={1.2} />

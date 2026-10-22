@@ -31,6 +31,8 @@ export interface AlmacenVisual {
   central: boolean;
   capacidad: number | null;
   stock: number | null;
+  /** Unidades en ruta que regresan a este almacen, con su hora estimada de llegada. */
+  arriban: string[];
 }
 
 export interface VehiculoVisual {
