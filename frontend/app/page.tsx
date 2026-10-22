@@ -73,6 +73,12 @@ export default function Pagina() {
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [cierre, setCierre] = useState<CierreCorrida | null>(null);
   const [avisos, setAvisos] = useState<AvisoLocal[]>([]);
+  // F01/F03: «Ver ruta en el mapa» desde el detalle (aunque se venga de otra pestaña)
+  const [foco, setFoco] = useState<{ x: number; y: number; n: number } | null>(null);
+  const verEnMapa = useCallback((x: number, y: number) => {
+    setPestana('panorama');
+    setFoco((f) => ({ x, y, n: (f?.n ?? 0) + 1 }));
+  }, []);
   const cabecera = useRef<HTMLDivElement>(null);
   const [altoCabecera, setAltoCabecera] = useState(110);
   const primerEstado = useRef(true);
@@ -87,9 +93,10 @@ export default function Pagina() {
     return () => ro.disconnect();
   }, []);
 
-  // cada pestana empieza arriba
+  // cada pestana empieza arriba; un enfoque pendiente solo vale mientras se esta en Panorama
   useEffect(() => {
     window.scrollTo({ top: 0 });
+    if (pestana !== 'panorama') setFoco(null);
   }, [pestana]);
   const irA = (p: Pestana) => setPestana(p);
 
@@ -279,6 +286,7 @@ export default function Pagina() {
             onAbrir={setSeleccion}
             onAviso={aviso}
             refrescar={refrescar}
+            foco={foco}
           />
         )}
         {pestana === 'cierre' && <PantallaCierre estado={estado} cierreRecibido={cierre} />}
@@ -296,6 +304,7 @@ export default function Pagina() {
           ambar={estado.umbralAmbar}
           onCerrar={() => setSeleccion(null)}
           onAbrir={setSeleccion}
+          onVerEnMapa={verEnMapa}
           onAviso={aviso}
         />
       )}

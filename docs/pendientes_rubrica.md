@@ -9,8 +9,8 @@ Estado: ⬜ pendiente · 🔄 en curso · ✅ hecho
 |---|---|---|
 | 1. Solo frontend: tiempos, semáforo de ocupación, KPI globales, tramos, español | C12–C16, C21, C27, C28, G01–G04, B11, C07 | ✅ |
 | 2. Backend + frontend: averías por tipo y horarios de la UT | D10–D13 (+ datos para E06, E13) | ✅ |
-| 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | 🔄 |
-| 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | ⬜ |
+| 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | ✅ |
+| 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | 🔄 |
 | 5. Cierre con la última planificación | G08–G10 | ⬜ |
 | 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | ⬜ |
 
@@ -35,8 +35,16 @@ Hecho:
 - `MapaOperacion.tsx`: `InsigniaAveria` (insignia con número, tipo 1 amarillo, 2 naranja, 3 morado) mientras está AVERIADA; `InsigniaTaller` (llave) en EN_TALLER.
 - Leyenda con los 3 tipos y el taller; tooltip «Avería tipo N · hasta dd/mm/aaaa hh:mm».
 
-### Fase 3
-Archivos: `frontend/components/PanelListas.tsx` (nuevo), `PantallaPanorama.tsx`, `MapaOperacion.tsx` (Filtros), `ModalDetalle.tsx`, `app/page.tsx`.
+### Fase 3 ✅
+Hecho:
+- `PanelListas.tsx` (nuevo): panel izquierdo plegable con las pestañas Transporte, Almacenes y Envíos. Se abre con el botón «Panel» del mapa y empieza recogido (E01).
+  - **Transporte**: ícono, ID, ocupación n/cap (%), píldora, estado (con chip de avería), pedidos a bordo desplegables con su cantidad, «Llega a destino en» y «Salió del origen hace» (E02–E07).
+  - Búsqueda «llega en ≤ N min» / «salió hace ≤ N min»; orden ascendente o descendente por unidad, ocupación, hora de llegada y hora de salida (E13–E15).
+  - Clic en la fila → centra el mapa en la posición interpolada y selecciona la unidad (F07). Clic en el mapa → el panel cambia a la pestaña correspondiente y resalta y desplaza la fila (F08).
+- `MapaOperacion.tsx`: `Filtros.semaforoUT` y `Filtros.semaforoAlmacen` (F15–F16), aplicados al mapa y a las listas; `vehiculoPasaFiltro`, `almacenPasaFiltro` y `vehiculosDePedido`; al seleccionar un pedido se resaltan las rutas de TODAS sus unidades (F01/F03).
+- `PantallaPanorama.tsx`: `enfocar(x, y)`, casillas de semáforo también en «Filtros» y prop `foco`.
+- `ModalDetalle.tsx` + `page.tsx`: botón «Ver ruta en el mapa» en el detalle del pedido (cambia a Panorama, centra y resalta, aunque se venga de la pestaña Pedidos); muestra `rutas`.
+- Limitación: si el pedido aún no tiene unidad, solo se centra el destino (no se dibuja la línea desde el almacén).
 
 ### Fase 4
 Archivos: `EstadoVisual.java` (AlmacenVisual, PedidoVisual), `MotorSimulacion.java`, `PanelListas.tsx`, `ModalDetalle.tsx`.

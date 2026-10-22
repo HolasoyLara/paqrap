@@ -9,6 +9,9 @@ import {
 import MapaOperacion, {
   acercar, centrarEn, FILTROS_POR_DEFECTO, type Filtros, InsigniaAveria, InsigniaTaller, ocupacionAlmacen, type Seleccion, type Vista, VISTA_COMPLETA, vistaDeZona,
 } from './MapaOperacion';
+import Tooltip, { type TooltipApi } from './Tooltip';
+import { IconoMini } from './Iconos';
+import PanelListas, { FiltroSemaforo, type PestanaPanel } from './PanelListas';
 
 /** Rango de ocupacion de cada color con los umbrales vigentes (verde/ambar se aplican al espacio libre). */
 function RANGO_OCUPACION(s: SemaforoOcupacion, verde: number, ambar: number): string {
@@ -19,8 +22,6 @@ function RANGO_OCUPACION(s: SemaforoOcupacion, verde: number, ambar: number): st
   if (s === 'ambar') return `(${v} – ${a} %)`;
   return `(más de ${a} %)`;
 }
-import Tooltip, { type TooltipApi } from './Tooltip';
-import { IconoMini } from './Iconos';
 
 interface Props {
   estado: EstadoVisual;
@@ -29,6 +30,8 @@ interface Props {
   onAbrir: (s: Seleccion) => void;
   onAviso: (texto: string, tipo?: 'ok' | 'error') => void;
   refrescar: () => void;
+  /** Pedido de enfoque desde fuera (boton «Ver ruta en el mapa»); `n` cambia en cada pedido. */
+  foco: { x: number; y: number; n: number } | null;
 }
 
 const TIPOS_RAPIDOS: [string, string][] = [
@@ -50,7 +53,7 @@ function Kpi({ etiqueta, valor, sub, sem }: { etiqueta: string; valor: string; s
 }
 
 /** V-2 · Panorama operativo: franja de KPI, mapa con la operacion en vivo y detalle bajo demanda. */
-export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbrir, onAviso, refrescar }: Props) {
+export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbrir, onAviso, refrescar, foco }: Props) {
   const [vista, setVista] = useState<Vista>(VISTA_COMPLETA);
   const [zona, setZona] = useState('full');
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_POR_DEFECTO);
@@ -64,6 +67,9 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
   const [menu, setMenu] = useState<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const [cantidadMenu, setCantidadMenu] = useState(1);
   const tooltip = useRef<TooltipApi>(null);
+  // E01: panel izquierdo con las listas; empieza recogido
+  const [verPanel, setVerPanel] = useState(false);
+  const [pestanaPanel, setPestanaPanel] = useState<PestanaPanel>('transporte');
 
   const k = estado.kpis;
   const enCurso = estado.estadoCorrida === 'EN_CURSO';
@@ -75,6 +81,19 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
   useEffect(() => {
     setVista(vistaDeZona(zona));
   }, [zona]);
+
+  /** Centra el mapa en (x, y) sin alejar la vista (F05-F09). */
+  const enfocar = useCallback((x: number, y: number) => setVista((v) => centrarEn(v, x, y)), []);
+
+  useEffect(() => {
+    if (foco) enfocar(foco.x, foco.y);
+  }, [foco, enfocar]);
+
+  // F06/F08: un clic en el mapa lleva el panel (si esta abierto) a la lista que corresponde y resalta la fila
+  useEffect(() => {
+    if (!seleccion) return;
+    setPestanaPanel(seleccion.tipo === 'vehiculo' ? 'transporte' : seleccion.tipo === 'almacen' ? 'almacenes' : 'envios');
+  }, [seleccion]);
 
   useEffect(() => {
     const cerrar = () => setMenu(null);
@@ -141,7 +160,7 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
   const semCumplimiento = semaforo(k.cumplimiento, 95, 85);
   return (
     <section className="panorama">
-      <div className="mapa-pantalla">
+      <div className={'mapa-pantalla' + (verPanel ? ' con-panel' : '')}>
         <MapaOperacion
           estado={estado}
           minutoAhora={minutoAhora}
@@ -156,6 +175,7 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
         />
 
         <div className="mapa-controles" onPointerDown={(e) => e.stopPropagation()}>
+          <button className={'btn-flot' + (verPanel ? ' activo' : '')} onClick={() => setVerPanel((x) => !x)}>Panel</button>
           <button className={'btn-flot' + (metricas ? ' activo' : '')} onClick={() => setMetricas((x) => !x)}>Métricas</button>
           <button className={'btn-flot' + (leyenda ? ' activo' : '')} onClick={() => setLeyenda((x) => !x)}>Leyenda</button>
           <button className={'btn-flot' + (verFiltros ? ' activo' : '')} onClick={() => setVerFiltros((x) => !x)}>Filtros</button>
@@ -171,6 +191,11 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
           <div className="banner banner-error mapa-aviso">
             <b>Colapso logístico detectado</b> el {estado.colapso.fecha}: {estado.colapso.motivo}. Cumplimiento en ese momento: {numero(estado.colapso.cumplimiento, 1)} %.
           </div>
+        )}
+
+        {verPanel && (
+          <PanelListas estado={estado} minutoAhora={minutoAhora} seleccion={seleccion} onAbrir={onAbrir} enfocar={enfocar}
+            filtros={filtros} setFiltros={setFiltros} pestana={pestanaPanel} setPestana={setPestanaPanel} onCerrar={() => setVerPanel(false)} />
         )}
 
         {verBuscar && (
@@ -201,6 +226,9 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
             <label><input type="checkbox" checked={filtros.mostrarPedidos} onChange={(e) => setFiltros({ ...filtros, mostrarPedidos: e.target.checked })} />Mostrar pedidos</label>
             <label><input type="checkbox" checked={filtros.mostrarBloqueos} onChange={(e) => setFiltros({ ...filtros, mostrarBloqueos: e.target.checked })} />Mostrar calles bloqueadas</label>
             <label><input type="checkbox" checked={filtros.unidadesEnAlmacen} onChange={(e) => setFiltros({ ...filtros, unidadesEnAlmacen: e.target.checked })} />Mostrar unidades en almacén</label>
+            <div className="subtitulo" style={{ marginTop: 4 }}>Semáforo de ocupación</div>
+            <FiltroSemaforo titulo="Unidades" valor={filtros.semaforoUT} onCambio={(v) => setFiltros({ ...filtros, semaforoUT: v })} />
+            <FiltroSemaforo titulo="Almacenes" valor={filtros.semaforoAlmacen} onCambio={(v) => setFiltros({ ...filtros, semaforoAlmacen: v })} />
             <div className="subtitulo" style={{ marginTop: 4 }}>Tipos de vehículo</div>
             {(['AUTO', 'MOTO', 'BICICLETA'] as const).map((t) => (
               <label key={t}><input type="checkbox" checked={filtros.tipos[t]} onChange={(e) => setFiltros({ ...filtros, tipos: { ...filtros.tipos, [t]: e.target.checked } })} />

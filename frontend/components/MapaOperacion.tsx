@@ -56,7 +56,12 @@ export interface Filtros {
   rutas: 'todas' | 'seleccionada' | 'ninguna';
   tipos: Record<string, boolean>;
   unidadesEnAlmacen: boolean;
+  /** F15-F16: colores de ocupacion visibles, compartidos entre las listas del panel y el mapa. */
+  semaforoUT: Record<SemaforoOcupacion, boolean>;
+  semaforoAlmacen: Record<SemaforoOcupacion, boolean>;
 }
+
+const TODOS_LOS_COLORES: Record<SemaforoOcupacion, boolean> = { vacio: true, verde: true, ambar: true, rojo: true };
 
 export const FILTROS_POR_DEFECTO: Filtros = {
   soloCriticos: false,
@@ -65,7 +70,28 @@ export const FILTROS_POR_DEFECTO: Filtros = {
   rutas: 'todas',
   tipos: { AUTO: true, MOTO: true, BICICLETA: true },
   unidadesEnAlmacen: false,
+  semaforoUT: { ...TODOS_LOS_COLORES },
+  semaforoAlmacen: { ...TODOS_LOS_COLORES },
 };
+
+/** La unidad pasa el filtro de tipo y de semaforo de ocupacion (las averiadas o en taller siempre se muestran). */
+export function vehiculoPasaFiltro(v: VehiculoVisual, f: Filtros, verde: number, ambar: number): boolean {
+  if (!f.tipos[v.tipo]) return false;
+  if (FUERA_DE_SERVICIO.has(v.estado)) return true;
+  return f.semaforoUT[ocupacionVehiculo(v, verde, ambar).sem];
+}
+
+/** El almacen pasa el filtro de semaforo de ocupacion (el central, sin semaforo, siempre se muestra). */
+export function almacenPasaFiltro(a: AlmacenVisual, f: Filtros, verde: number, ambar: number): boolean {
+  const o = ocupacionAlmacen(a, verde, ambar);
+  return o == null || f.semaforoAlmacen[o.sem];
+}
+
+/** Unidades que llevan alguna parte del pedido (todas, no solo la primera). */
+export function vehiculosDePedido(estado: EstadoVisual, idPedido: string): string[] {
+  const p = estado.pedidos.find((x) => x.id === idPedido);
+  return p?.vehiculos ? p.vehiculos.split(', ').filter(Boolean) : [];
+}
 
 interface Props {
   estado: EstadoVisual;
@@ -206,11 +232,11 @@ export default function MapaOperacion(props: Props) {
   const vehiculosVisibles = useMemo(
     () =>
       estado.vehiculos.filter((v) => {
-        if (!filtros.tipos[v.tipo]) return false;
+        if (!vehiculoPasaFiltro(v, filtros, estado.umbralVerde, estado.umbralAmbar)) return false;
         if (EN_BASE.has(v.estado) && v.tray.length === 0) return filtros.unidadesEnAlmacen;
         return true;
       }),
-    [estado.vehiculos, filtros],
+    [estado.vehiculos, filtros, estado.umbralVerde, estado.umbralAmbar],
   );
 
   const posicionBase = useMemo(() => {
@@ -394,22 +420,20 @@ export default function MapaOperacion(props: Props) {
   }, []);
 
   // ---------------- capas ----------------
-  const idSel = seleccion?.tipo === 'vehiculo' ? seleccion.id : null;
-  const vehiculoDePedido = useMemo(() => {
-    if (seleccion?.tipo !== 'pedido') return null;
-    const p = estado.pedidos.find((x) => x.id === seleccion.id);
-    return p?.vehiculos ? p.vehiculos.split(', ')[0] : null;
-  }, [seleccion, estado.pedidos]);
-  const vehiculoResaltado = idSel ?? vehiculoDePedido;
+  // F01/F03: al seleccionar un pedido se resaltan las rutas de TODAS las unidades que lo llevan
+  const claveResaltados = seleccion?.tipo === 'vehiculo' ? seleccion.id
+    : seleccion?.tipo === 'pedido' ? vehiculosDePedido(estado, seleccion.id).join(',') : '';
+  const resaltados = useMemo(() => new Set(claveResaltados ? claveResaltados.split(',') : []), [claveResaltados]);
+  const hayResaltado = resaltados.size > 0;
 
   const rutas = useMemo(() => {
     if (filtros.rutas === 'ninguna') return [];
     return vehiculosVisibles
       .filter((v) => v.tray.length >= 6)
-      .filter((v) => filtros.rutas === 'todas' || v.id === vehiculoResaltado)
-      .map((v) => ({ id: v.id, sel: v.id === vehiculoResaltado }))
+      .filter((v) => filtros.rutas === 'todas' || resaltados.has(v.id))
+      .map((v) => ({ id: v.id, sel: resaltados.has(v.id) }))
       .sort((a, b) => Number(a.sel) - Number(b.sel));
-  }, [vehiculosVisibles, filtros.rutas, vehiculoResaltado]);
+  }, [vehiculosVisibles, filtros.rutas, resaltados]);
 
   const conteoEnAlmacen = useMemo(() => {
     const m = new Map<string, number>();
@@ -472,7 +496,7 @@ export default function MapaOperacion(props: Props) {
             }
             if (i + 3 >= v.tray.length) resto = v.tray.slice(i);
           }
-          const opacidad = vehiculoResaltado ? (r.sel ? 0.95 : 0.15) : 0.45;
+          const opacidad = hayResaltado ? (r.sel ? 0.95 : 0.15) : 0.45;
           return (
             <polyline key={`ruta-${r.id}`} points={puntosTray(resto, desde)} fill="none" stroke={NAVY}
               strokeWidth={r.sel ? 3.2 : 2} strokeDasharray="7 5" strokeLinecap="round" strokeLinejoin="round"
@@ -483,7 +507,7 @@ export default function MapaOperacion(props: Props) {
         <line ref={lineaHoverRef} x1={0} y1={0} x2={0} y2={0} stroke={NAVY} strokeOpacity={0.35} strokeWidth={8}
           strokeLinecap="round" vectorEffect="non-scaling-stroke" visibility="hidden" pointerEvents="none" />
 
-        {estado.almacenes.map((a) => {
+        {estado.almacenes.filter((a) => almacenPasaFiltro(a, filtros, verde, ambar)).map((a) => {
           const ocup = ocupacionAlmacen(a, verde, ambar);
           const vacio = ocup?.sem === 'vacio';
           const color = ocup == null ? NAVY : COLOR_OCUPACION[ocup.sem];
@@ -528,10 +552,10 @@ export default function MapaOperacion(props: Props) {
           })}
 
         {vehiculosVisibles.map((v) => {
-          const sel = vehiculoResaltado === v.id;
+          const sel = resaltados.has(v.id);
           const est = estiloVehiculo(v, verde, ambar);
           const urgencia = FUERA_DE_SERVICIO.has(v.estado) ? null : urgenciaVehiculo(v, verde, ambar);
-          const atenuado = v.estado === 'ALIMENTACION' || v.estado === 'MANTENIMIENTO' || (vehiculoResaltado && !sel);
+          const atenuado = v.estado === 'ALIMENTACION' || v.estado === 'MANTENIMIENTO' || (hayResaltado && !sel);
           return (
             <g key={v.id} ref={(el) => {
               if (el) vehiculosRef.current.set(v.id, el);

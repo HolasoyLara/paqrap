@@ -16,6 +16,8 @@ interface Props {
   ambar: number;
   onCerrar: () => void;
   onAbrir: (s: Seleccion) => void;
+  /** Va a Panorama y centra el mapa (F01/F03, F09). */
+  onVerEnMapa: (x: number, y: number) => void;
   onAviso: (texto: string, tipo?: 'ok' | 'error') => void;
 }
 
@@ -101,7 +103,7 @@ function Kv({ pares }: { pares: [string, React.ReactNode][] }) {
   );
 }
 
-export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar, onCerrar, onAbrir, onAviso }: Props) {
+export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar, onCerrar, onAbrir, onVerEnMapa, onAviso }: Props) {
   const [datos, setDatos] = useState<DetalleVehiculo | DetallePedido | DetalleAlmacen | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [edicion, setEdicion] = useState<{ cantidad: number; tipo: string; observaciones: string } | null>(null);
@@ -272,6 +274,10 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
       <>
         <h3>Pedido {p.id}</h3>
         {pill}
+        <div className="acciones-modal" style={{ marginTop: 10 }}>
+          <button className="btn btn-sm btn-primary" onClick={() => onVerEnMapa(p.x, p.y)}>Ver ruta en el mapa</button>
+          <span className="hint">{p.vehiculos.length > 1 ? `Resalta las rutas de ${p.vehiculos.length} unidades.` : p.vehiculos.length ? 'Resalta la ruta de su unidad.' : 'Aún sin unidad: centra el destino.'}</span>
+        </div>
         <div style={{ height: 14 }} />
         <Kv pares={[
           ['Estado', p.estado],
@@ -292,6 +298,7 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
         {p.partes.length > 1 && (
           <p className="hint">Partes activas: {p.partes.map((x) => `${x.id} (${x.cantidad} · ${x.estado})`).join(', ')}</p>
         )}
+        {p.rutas.length > 0 && <p className="hint">Rutas: {p.rutas.join(', ')}</p>}
         {p.modificable && enCurso && diaADia && (
           <div className="acciones-modal">
             {!edicion ? (
