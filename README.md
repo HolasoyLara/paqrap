@@ -64,6 +64,12 @@ En Linux y macOS los datos y las bitácoras quedan en `~/.local/share/paqrap`.
 
 ## 2. Pantallas (prototipo v04)
 
+**Navegación.** Un botón ☰ abre una **barra lateral que se esconde con un clic**. Ahí se elige el modo y la pantalla:
+- **Simulación**: periodo de 5 días o colapso logístico (acelerados).
+- **Operación día a día**: tiempo real 1:1 con la hora de hoy, que **no es una simulación**; los pedidos se registran en vivo.
+
+El modo cambia el contenido de Parámetros: la simulación lista solo sus dos escenarios, y la operación día a día corre en tiempo real. En **Panorama** el mapa ocupa **toda la pantalla** y no hay cabecera ni pestañas: solo el botón ☰, la barra de controles del mapa, y arriba a la derecha el estado, la hora simulada, *Iniciar*, *Detener* y un botón **Información** que despliega los tiempos y la ocupación global.
+
 1. **Parámetros (V-1)**
    - Escenario, fecha y hora de inicio, duración objetivo y tipos de entrega incluidos. El algoritmo queda fijo en GA y la semilla en 20260902 (misma fecha + mismos archivos = misma corrida); ACO y otras semillas se eligen por la API.
    - Umbrales del semáforo (C10); flota, almacenes y turnos.

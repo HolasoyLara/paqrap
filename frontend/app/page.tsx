@@ -6,6 +6,8 @@ import { ahoraLima, aInputFecha } from '@/lib/formato';
 import type { CierreCorrida, Configuracion, ParametrosCorrida, ResumenArchivo } from '@/lib/tipos';
 import { useEstadoSimulacion } from '@/lib/useEstadoSimulacion';
 import TopBar from '@/components/TopBar';
+import Sidebar, { type Modo } from '@/components/Sidebar';
+import BarraMapa from '@/components/BarraMapa';
 import PantallaParametros from '@/components/PantallaParametros';
 import PantallaPanorama from '@/components/PantallaPanorama';
 import PantallaCierre from '@/components/PantallaCierre';
@@ -16,12 +18,6 @@ import type { Seleccion } from '@/components/MapaOperacion';
 
 type Pestana = 'parametros' | 'panorama' | 'cierre' | 'pedidos';
 
-const PESTANAS: [Pestana, string][] = [
-  ['parametros', '1 · Parámetros'],
-  ['panorama', '2 · Panorama'],
-  ['cierre', '3 · Cierre'],
-  ['pedidos', '4 · Pedidos'],
-];
 
 /** Semilla fija de la corrida (la misma que el valor por defecto del backend). Ya no se configura desde la pantalla. */
 const SEMILLA_FIJA = 20260902;
@@ -79,19 +75,22 @@ export default function Pagina() {
     setPestana('panorama');
     setFoco((f) => ({ x, y, n: (f?.n ?? 0) + 1 }));
   }, []);
+  const [modo, setModo] = useState<Modo>('simulacion');
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [infoMapa, setInfoMapa] = useState(false);
   const cabecera = useRef<HTMLDivElement>(null);
   const [altoCabecera, setAltoCabecera] = useState(110);
   const primerEstado = useRef(true);
   const estadoPrevio = useRef<string | null>(null);
 
-  // el panel lateral y el mapa a pantalla completa se ubican justo debajo de la cabecera
+  // el panel lateral de detalle se ubica justo debajo de la cabecera (en el mapa no hay cabecera)
   useEffect(() => {
     const el = cabecera.current;
     if (!el) return;
     const ro = new ResizeObserver(() => setAltoCabecera(el.getBoundingClientRect().height));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [pestana === 'panorama']);
 
   // cada pestana empieza arriba; un enfoque pendiente solo vale mientras se esta en Panorama
   useEffect(() => {
@@ -99,6 +98,17 @@ export default function Pagina() {
     if (pestana !== 'panorama') setFoco(null);
   }, [pestana]);
   const irA = (p: Pestana) => setPestana(p);
+  const cambiarModo = (m: Modo) => {
+    setModo(m);
+    setPestana('parametros');
+    if (!form || !config) return;
+    if (m === 'diaria') {
+      setForm({ ...form, escenario: 'TIEMPO_REAL', fechaInicio: ahoraLima() });
+    } else if (form.escenario === 'TIEMPO_REAL') {
+      const def = config.escenarios.find((e) => e.id === 'SIMULACION_5D');
+      setForm({ ...form, escenario: 'SIMULACION_5D', fechaInicio: aInputFecha(def?.fechaInicioPorDefecto ?? '2026-09-01T00:00') });
+    }
+  };
 
   const cargarConfig = useCallback(() => {
     api.configuracion()
@@ -150,7 +160,10 @@ export default function Pagina() {
     const previo = estadoPrevio.current;
     if (primerEstado.current) {
       primerEstado.current = false;
-      if (estado.estadoCorrida === 'EN_CURSO') setPestana('panorama');
+      if (estado.estadoCorrida === 'EN_CURSO') {
+        setPestana('panorama');
+        setModo(estado.escenario === 'TIEMPO_REAL' ? 'diaria' : 'simulacion');
+      }
     } else if (previo === 'EN_CURSO' && (estado.estadoCorrida === 'FINALIZADA' || estado.estadoCorrida === 'DETENIDA')) {
       api.cierre().then(setCierre).catch(() => undefined);
       setPestana('cierre');
@@ -234,24 +247,61 @@ export default function Pagina() {
 
   const pantallaMapa = pestana === 'panorama';
   return (
-    <div className={'app' + (pantallaMapa ? ' app-mapa' : '')} style={{ ['--cab-h' as string]: `${altoCabecera}px` }}>
-      <div ref={cabecera} className="cabecera">
-      <TopBar
-        estado={estado}
-        minutoAhora={minutoAhora}
-        escenarioTexto={escenarioTexto}
-        algoritmoTexto={algoritmoTexto}
-        puedeIniciar={!!form && !!archivos && archivos.every((a) => a.valido)}
-        ocupado={ocupado}
-        onIniciar={iniciar}
-        onDetener={detener}
+    <div className={'app' + (pantallaMapa ? ' app-mapa' : '')} style={{ ['--cab-h' as string]: pantallaMapa ? '0px' : `${altoCabecera}px` }}>
+      <Sidebar
+        abierto={menuAbierto}
+        onCerrar={() => setMenuAbierto(false)}
+        modo={modo}
+        onModo={(m) => { cambiarModo(m); }}
+        pestana={pestana}
+        onIr={irA}
+        corridaEnCurso={enCurso}
+        modoCorrida={estado && estado.estadoCorrida !== 'SIN_CORRIDA' ? (estado.escenario === 'TIEMPO_REAL' ? 'diaria' : 'simulacion') : null}
       />
-      <nav className="tabs">
-        {PESTANAS.map(([id, etiqueta]) => (
-          <button key={id} className={'tab' + (pestana === id ? ' active' : '')} onClick={() => irA(id)}>{etiqueta}</button>
-        ))}
-      </nav>
-      </div>
+      {pantallaMapa ? (
+        <>
+          {/* mapa a pantalla completa: sin cabecera ni pestanas, solo controles flotantes */}
+          <button className="btn-menu-flot" type="button" aria-label="Abrir menú" title="Menú" onClick={() => setMenuAbierto(true)}>☰</button>
+          <BarraMapa
+            estado={estado}
+            minutoAhora={minutoAhora}
+            puedeIniciar={!!form && !!archivos && archivos.every((a) => a.valido)}
+            ocupado={ocupado}
+            onIniciar={iniciar}
+            onDetener={detener}
+            infoAbierta={infoMapa}
+            onInfo={() => setInfoMapa((x) => !x)}
+          />
+          {infoMapa && (
+            <div className="info-flot">
+              <TopBar
+                estado={estado}
+                minutoAhora={minutoAhora}
+                escenarioTexto={escenarioTexto}
+                algoritmoTexto={algoritmoTexto}
+                puedeIniciar={!!form && !!archivos && archivos.every((a) => a.valido)}
+                ocupado={ocupado}
+                onIniciar={iniciar}
+                onDetener={detener}
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <div ref={cabecera} className="cabecera">
+          <TopBar
+            estado={estado}
+            minutoAhora={minutoAhora}
+            escenarioTexto={escenarioTexto}
+            algoritmoTexto={algoritmoTexto}
+            puedeIniciar={!!form && !!archivos && archivos.every((a) => a.valido)}
+            ocupado={ocupado}
+            onIniciar={iniciar}
+            onDetener={detener}
+            onMenu={() => setMenuAbierto(true)}
+          />
+        </div>
+      )}
       <main className={pantallaMapa ? 'main-mapa' : undefined}>
         {(sinBackend || (errorConfig && !config)) && (
           <div className="banner banner-error">
@@ -263,6 +313,7 @@ export default function Pagina() {
         {pestana === 'parametros' && config && form && (
           <PantallaParametros
             config={config}
+            modo={modo}
             form={form}
             setForm={(f) => setForm(f.escenario === 'TIEMPO_REAL' && form.escenario !== 'TIEMPO_REAL' ? { ...f, fechaInicio: ahoraLima() } : f)}
             archivos={archivos}
