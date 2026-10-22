@@ -1513,10 +1513,11 @@ public class MotorSimulacion {
                     eta = fecha(r.getHoraRegreso());
                 }
             }
+            // solo las pausas de alimentacion que ya ocurrieron en esta corrida (las mas recientes, ultimas 24 h)
             List<String> horas = new ArrayList<>();
-            for (double h : jornada.horasAlimentacion(v.getCorrelativo())) {
-                int hh = (int) h;
-                horas.add(String.format("%02d:00–%02d:00", hh, (hh + (int) operacion.getDuracionAlimentacionH()) % 24));
+            for (double h : jornada.pausasOcurridas(v.getCorrelativo(), Math.max(horaInicio, t - 24.0), t)) {
+                String fin = fecha(h + operacion.getDuracionAlimentacionH());
+                horas.add(fecha(h) + " – " + fin.substring(fin.length() - 5));
             }
             String turno = "";
             for (Turno tu : turnos) if (tu.estaVigente(ConversorTiempo.horaDelDia(t))) turno = String.format("%02d:00–%02d:00", (int) tu.getHoraInicio(), (int) tu.getHoraFin());

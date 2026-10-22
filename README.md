@@ -68,7 +68,7 @@ En Linux y macOS los datos y las bitácoras quedan en `~/.local/share/paqrap`.
    - Escenario, algoritmo (GA o ACO), semilla, fecha y hora de inicio, duración objetivo y tipos de entrega incluidos.
    - Umbrales del semáforo (C10); flota, almacenes y turnos.
    - Parámetros avanzados: velocidades y costos, plazos, ventana de planificación, aceleración y umbrales del colapso, averías por día y parámetros de cada algoritmo.
-   - Archivos de entrada: se muestran los publicados por el curso, con cuántas líneas válidas y errores tiene cada uno. Se pueden subir archivos propios de ventas, bloqueos, averías o mantenimiento, que se validan línea por línea.
+   - Archivos de entrada: se muestran los publicados por el curso, con cuántas líneas válidas y errores tiene cada uno. Se pueden subir archivos propios de ventas, bloqueos, averías o mantenimiento, que se validan línea por línea. Ventas y bloqueos son mensuales: para un periodo que cruza de mes (caso del 30 de septiembre) se pueden subir 2 archivos a la vez, uno por mes.
 
 2. **Panorama (V-2)**, el mapa en vivo de la ciudad de 70 × 50 km. Muestra:
    - los vehículos animados, con un ícono por tipo y la distinción entre operativos y averiados;

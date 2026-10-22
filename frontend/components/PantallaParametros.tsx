@@ -13,7 +13,7 @@ interface Props {
   ocupado: boolean;
   puedeIniciar: boolean;
   onIniciar: () => void;
-  onSubir: (tipo: string, archivo: File) => void;
+  onSubir: (tipo: string, archivos: File[]) => void;
   onQuitar: (tipo: string) => void;
   onUmbralesEnVivo: (verde: number, ambar: number) => void;
 }
@@ -82,14 +82,16 @@ export default function PantallaParametros(props: Props) {
                       <span className="badge-dot" />{a.valido ? (a.personalizado ? 'Personalizado' : 'Validado') : 'No válido'}
                     </span>
                     <input type="file" accept=".txt,.csv,text/plain" style={{ display: 'none' }}
+                      multiple={a.tipo === 'ventas' || a.tipo === 'bloqueos'}
                       ref={(el) => { entradas.current[a.tipo] = el; }}
                       onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) props.onSubir(a.tipo, f);
+                        const fs = Array.from(e.target.files ?? []);
+                        if (fs.length) props.onSubir(a.tipo, fs);
                         e.target.value = '';
                       }} />
-                    <button className="btn btn-sm btn-ghost" disabled={bloqueado} title="Reemplazar por un archivo propio"
-                      onClick={() => entradas.current[a.tipo]?.click()}>Subir</button>
+                    <button className="btn btn-sm btn-ghost" disabled={bloqueado}
+                      title={a.tipo === 'ventas' || a.tipo === 'bloqueos' ? 'Reemplazar por archivos propios (puede elegir 2 a la vez)' : 'Reemplazar por un archivo propio'}
+                      onClick={() => entradas.current[a.tipo]?.click()}>{a.tipo === 'ventas' || a.tipo === 'bloqueos' ? 'Subir (1 o 2)' : 'Subir'}</button>
                     {a.personalizado && (
                       <button className="btn btn-sm btn-ghost" disabled={bloqueado} onClick={() => props.onQuitar(a.tipo)}>Quitar</button>
                     )}
@@ -98,6 +100,11 @@ export default function PantallaParametros(props: Props) {
               ))}
             </ul>
           )}
+          <p className="hint" style={{ marginTop: 10 }}>
+            <b>Caso del 30 de septiembre:</b> el periodo de 5 días cruza de septiembre a octubre, así que en «Pedidos» y en «Bloqueos»
+            puede subir 2 archivos a la vez, uno por mes (p. ej. <code>ventas.202609.txt</code> y <code>ventas.202610.txt</code>). Si el
+            nombre no indica el mes, el primero (por orden alfabético) se usa para el mes de la fecha de inicio y el segundo para el mes siguiente.
+          </p>
           <p className="hint" style={{ marginTop: 10 }}>
             Formatos: ventas <code>##d##h##m:x,y,cliente,cantidad,plazo</code> · bloqueos <code>##d##h##m-##d##h##m:x1,y1,…</code> ·
             mantenimiento <code>aaaammdd:TTNN</code> · averías <code>##d##h##m:TTNN:tipo</code>. Datos publicados disponibles:
