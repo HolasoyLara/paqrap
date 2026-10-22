@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { DetalleAlmacen, DetallePedido, DetalleVehiculo, EventoDetalle } from '@/lib/tipos';
-import { ETIQUETA_SEMAFORO, numero, semaforo, soles } from '@/lib/formato';
+import {
+  claseOcupacion, ETIQUETA_EVENTO, ETIQUETA_OCUPACION, ETIQUETA_SEMAFORO, numero, porcentaje, semaforo, semaforoOcupacion, soles,
+} from '@/lib/formato';
 import type { Seleccion } from './MapaOperacion';
 
 interface Props {
@@ -14,6 +16,8 @@ interface Props {
   ambar: number;
   onCerrar: () => void;
   onAbrir: (s: Seleccion) => void;
+  /** Va a Panorama y centra el mapa (F01/F03, F09). */
+  onVerEnMapa: (x: number, y: number) => void;
   onAviso: (texto: string, tipo?: 'ok' | 'error') => void;
 }
 
@@ -30,12 +34,37 @@ const ICONO_EVENTO: Record<string, string> = {
   ENTREGA: '✓', DISPONIBLE: '✓', DESPACHO: '→', REGRESO: '←', REUBICACION: '↔', ASIGNACION: '→', REGISTRO: '+',
   DIVISION: '÷', EDICION: '✎', CANCELACION: '×',
 };
-const ETIQUETA_EVENTO: Record<string, string> = {
-  RECALCULO: 'Recálculo de ruta', REASIGNACION: 'Reasignación de pedido', TRANSBORDO: 'Transbordo', AVERIA: 'Avería',
-  COLAPSO: 'Colapso', REPROGRAMACION: 'Reprogramación', ENTREGA: 'Entrega', DISPONIBLE: 'Disponible', DESPACHO: 'Despacho',
-  REGRESO: 'Regreso', REUBICACION: 'Reubicación', ASIGNACION: 'Asignación', REGISTRO: 'Registro', DIVISION: 'Entrega parcial',
-  EDICION: 'Edición', CANCELACION: 'Cancelación',
-};
+/** Hora "hh:mm" de una fecha del backend ("dd/mm/aaaa hh:mm" u otra que termine en la hora). */
+const soloHora = (f: string) => (f && f.length >= 5 ? f.slice(-5) : f);
+
+/** B11: la ruta como lista de tramos origen -> destino, con hora de salida y de llegada. */
+function Tramos({ ruta, onAbrir }: { ruta: NonNullable<DetalleVehiculo['ruta']>; onAbrir: (s: Seleccion) => void }) {
+  const tramos: { origen: string; destino: string; sale: string; llega: string; pedido: string | null; hecho: boolean; actual: boolean }[] = [];
+  let origen = `Almacén ${ruta.almacenSalida}`;
+  let sale = ruta.salida;
+  let marcadoActual = false;
+  for (const p of ruta.paradas) {
+    const entregada = p.estado === 'Entregada';
+    const actual = !entregada && !marcadoActual;
+    if (actual) marcadoActual = true;
+    tramos.push({ origen, destino: `(${p.x}, ${p.y}) · pedido ${p.pedido}`, sale, llega: p.llegada, pedido: p.pedido, hecho: entregada, actual });
+    origen = `(${p.x}, ${p.y})`;
+    sale = p.salida;
+  }
+  tramos.push({ origen, destino: `Almacén ${ruta.almacenRetorno}`, sale, llega: ruta.regresoEstimado, pedido: null, hecho: false, actual: !marcadoActual });
+  return (
+    <ol className="tramos-lista">
+      {tramos.map((t, i) => (
+        <li key={i} className={'tramo' + (t.hecho ? ' hecho' : '') + (t.actual ? ' actual' : '') + (t.pedido ? ' fila-click' : '')}
+          onClick={t.pedido ? () => onAbrir({ tipo: 'pedido', id: t.pedido! }) : undefined}>
+          <span className="tramo-num">{i + 1}</span>
+          <span className="tramo-ruta">{t.origen} → {t.destino}</span>
+          <span className="tramo-horas">sale {soloHora(t.sale)} · llega {soloHora(t.llega)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function tipoDesdeEtiqueta(etiqueta: string): string {
   const horas = etiqueta.match(/(\d+)\s*h/);
@@ -74,7 +103,7 @@ function Kv({ pares }: { pares: [string, React.ReactNode][] }) {
   );
 }
 
-export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar, onCerrar, onAbrir, onAviso }: Props) {
+export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar, onCerrar, onAbrir, onVerEnMapa, onAviso }: Props) {
   const [datos, setDatos] = useState<DetalleVehiculo | DetallePedido | DetalleAlmacen | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [edicion, setEdicion] = useState<{ cantidad: number; tipo: string; observaciones: string } | null>(null);
@@ -159,7 +188,10 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
         <span className={'semaforo-pill ' + (v.averia ? 'semaforo-rojo' : 'semaforo-gris')}>{v.estado}</span>
         <div style={{ height: 14 }} />
         <div className="carga-barra" title="Carga actual / capacidad">
-          <div className="carga-texto"><span>Carga</span><b>{v.carga} / {v.capacidad} paquetes</b></div>
+          <div className="carga-texto"><span>Ocupación</span>
+            <b>{v.carga} / {v.capacidad} paquetes ({Math.round(porcentaje(v.carga, v.capacidad))} %){' '}
+              <span className={claseOcupacion(semaforoOcupacion(porcentaje(v.carga, v.capacidad), verde, ambar))}>
+                {ETIQUETA_OCUPACION[semaforoOcupacion(porcentaje(v.carga, v.capacidad), verde, ambar)]}</span></b></div>
           <div className="progreso"><div style={{ width: `${v.capacidad ? Math.min(100, (100 * v.carga) / v.capacidad) : 0}%` }} /></div>
         </div>
         <div style={{ height: 12 }} />
@@ -169,7 +201,7 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
           ['Velocidad · costo', `${v.velocidad} km/h · S/ ${v.costoKm.toFixed(2)} por km`],
           ['Posición', `(${numero(v.x, 1)}, ${numero(v.y, 1)}) km`],
           ['Próxima parada', v.proximaParada],
-          ['ETA', v.eta],
+          ['Llegada estimada', v.eta],
           ['Próximo mantenimiento', v.proximoMantenimiento],
           ['Avería', v.averia ?? 'Sin avería'],
           // la alimentación solo se muestra si la pausa ya ocurrió en la corrida
@@ -192,8 +224,11 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
             <p className="hint">
               Ruta {v.ruta.id} · {v.ruta.causa} · sale de {v.ruta.almacenSalida} ({v.ruta.salida}) · regresa a {v.ruta.almacenRetorno} (~{v.ruta.regresoEstimado})
             </p>
+            <h4>Tramos de la ruta</h4>
+            <Tramos ruta={v.ruta} onAbrir={onAbrir} />
             {v.ruta.paradas.length ? (
               <>
+                <h4 style={{ marginTop: 12 }}>Pedidos en la ruta</h4>
                 <p className="hint" style={{ margin: '0 0 8px' }}>
                   {v.ruta.paradas.length === 1 ? '1 pedido en la ruta' : `${v.ruta.paradas.length} pedidos en la ruta, en orden de entrega`}
                   {' · '}{v.ruta.paradas.reduce((t, p) => t + p.cantidad, 0)} paquetes en total
@@ -210,7 +245,7 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
                           <span className={'semaforo-pill ' + (p.aTiempo ? 'semaforo-verde' : 'semaforo-rojo')}>{p.estado}</span>
                         </div>
                         <div className="parada-det">{p.cantidad} paq. → ({p.x}, {p.y}) · cliente {p.cliente}</div>
-                        <div className="parada-det">Llegada {p.llegada} · límite {p.limite}</div>
+                        <div className="parada-det">Llegada {p.llegada} · salida {p.salida} · límite {p.limite}</div>
                       </li>
                     );
                   })}
@@ -239,6 +274,10 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
       <>
         <h3>Pedido {p.id}</h3>
         {pill}
+        <div className="acciones-modal" style={{ marginTop: 10 }}>
+          <button className="btn btn-sm btn-primary" onClick={() => onVerEnMapa(p.x, p.y)}>Ver ruta en el mapa</button>
+          <span className="hint">{p.vehiculos.length > 1 ? `Resalta las rutas de ${p.vehiculos.length} unidades.` : p.vehiculos.length ? 'Resalta la ruta de su unidad.' : 'Aún sin unidad: centra el destino.'}</span>
+        </div>
         <div style={{ height: 14 }} />
         <Kv pares={[
           ['Estado', p.estado],
@@ -259,6 +298,7 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
         {p.partes.length > 1 && (
           <p className="hint">Partes activas: {p.partes.map((x) => `${x.id} (${x.cantidad} · ${x.estado})`).join(', ')}</p>
         )}
+        {p.rutas.length > 0 && <p className="hint">Rutas: {p.rutas.join(', ')}</p>}
         {p.modificable && enCurso && diaADia && (
           <div className="acciones-modal">
             {!edicion ? (
@@ -290,11 +330,11 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
     );
   } else if (datos && seleccion.tipo === 'almacen') {
     const a = datos as DetalleAlmacen;
-    const sem = a.porcentaje == null ? null : semaforo(a.porcentaje, verde, ambar);
+    const sem = a.porcentaje == null ? null : semaforoOcupacion(a.porcentaje, verde, ambar);
     cuerpo = (
       <>
         <h3>{a.nombre}</h3>
-        {sem ? <span className={'semaforo-pill semaforo-' + sem}>{ETIQUETA_SEMAFORO[sem]} (nivel de stock)</span>
+        {sem ? <span className={claseOcupacion(sem)}>Ocupación: {ETIQUETA_OCUPACION[sem]}</span>
           : <p className="empty-hint">Este almacén no tiene capacidad máxima, así que no aplica semaforización de stock.</p>}
         <div style={{ height: 14 }} />
         <Kv pares={[

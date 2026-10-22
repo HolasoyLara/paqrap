@@ -33,6 +33,29 @@ export interface AlmacenVisual {
   stock: number | null;
   /** Unidades en ruta que regresan a este almacen, con su hora estimada de llegada. */
   arriban: string[];
+  /** Partes en rutas que ya salieron de este almacen (E20). */
+  pedidosEnTransito: number;
+  /** Partes asignadas que aun no salen, con su minuto simulado de salida (E21). */
+  porSalir: PedidoHora[];
+  /** Entregas de las ultimas 24 h simuladas de rutas que salieron de este almacen (E22). */
+  entregados: PedidoHora[];
+}
+
+export interface PedidoHora {
+  pedido: string;
+  minuto: number;
+}
+
+/** Parte de un pedido (E31): unidad, ruta, almacen de salida y horas en minutos simulados (null si aun no tiene unidad). */
+export interface ParteVisual {
+  id: string;
+  vehiculo: string | null;
+  ruta: string | null;
+  almacen: string | null;
+  cantidad: number;
+  salidaMin: number | null;
+  llegadaMin: number | null;
+  estado: string;
 }
 
 export interface VehiculoVisual {
@@ -49,6 +72,16 @@ export interface VehiculoVisual {
   destino: string;
   tray: number[];
   base: string;
+  /** Tipo de averia vigente (1, 2 o 3) mientras la unidad esta AVERIADA o EN_TALLER; null si no. */
+  tipoAveria: number | null;
+  /** Minuto simulado en que termina la averia en el lugar (AVERIADA) o la estadia en taller (EN_TALLER). */
+  finAveriaMin: number | null;
+  /** Minutos simulados de la ruta actual: salida del origen, llegada a la siguiente parada y regreso. */
+  salidaMin: number | null;
+  llegadaProximaMin: number | null;
+  regresoMin: number | null;
+  /** Paquetes por pedido a bordo. */
+  pedidosCarga: { id: string; cantidad: number }[];
 }
 
 export interface PedidoVisual {
@@ -63,6 +96,7 @@ export interface PedidoVisual {
   vehiculos: string;
   reprogramado: boolean;
   cliente: string;
+  partes: ParteVisual[];
 }
 
 export interface BloqueoVisual {
@@ -367,6 +401,21 @@ export interface CierreCorrida {
   colapso: InfoColapso | null;
   parametros: Record<string, unknown>;
   fuentes: Record<string, string>;
+  /** G08-G10: rutas vigentes al cierre (null en corridas guardadas antes de este cambio). */
+  ultimaPlanificacion: {
+    fecha: string;
+    causa: string;
+    rutas: {
+      vehiculo: string;
+      tipo: string;
+      ruta: string;
+      almacenSalida: string;
+      salida: string;
+      paradas: { pedido: string; cantidad: number; llegada: string }[];
+      almacenRetorno: string;
+      regreso: string;
+    }[];
+  } | null;
 }
 
 export interface FilaPedido {

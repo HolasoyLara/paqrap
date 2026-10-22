@@ -32,7 +32,22 @@ public record CierreCorrida(
         Verificacion verificacion,
         InfoColapso colapso,
         Map<String, Object> parametros,
-        Map<String, String> fuentes) {
+        Map<String, String> fuentes,
+        UltimaPlanificacion ultimaPlanificacion) {
+
+    /**
+     * Ultima planificacion estable al cierre (G08-G10): hora y causa de la ultima planificacion y, por unidad con
+     * ruta vigente, almacen de salida, paradas pendientes y regreso.
+     */
+    public record UltimaPlanificacion(String fecha, String causa, List<RutaVigente> rutas) {
+    }
+
+    public record RutaVigente(String vehiculo, String tipo, String ruta, String almacenSalida, String salida,
+                              List<ParadaPlan> paradas, String almacenRetorno, String regreso) {
+    }
+
+    public record ParadaPlan(String pedido, int cantidad, String llegada) {
+    }
 
     public record Resumen(int pedidosRegistrados, int entregados, int entregadosATiempo, int entregadosTarde,
                           int enCurso, int incumplidosSinEntregar, int cancelados, double cumplimiento,
