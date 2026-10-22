@@ -49,6 +49,16 @@ export interface VehiculoVisual {
   destino: string;
   tray: number[];
   base: string;
+  /** Tipo de averia vigente (1, 2 o 3) mientras la unidad esta AVERIADA o EN_TALLER; null si no. */
+  tipoAveria: number | null;
+  /** Minuto simulado en que termina la averia en el lugar (AVERIADA) o la estadia en taller (EN_TALLER). */
+  finAveriaMin: number | null;
+  /** Minutos simulados de la ruta actual: salida del origen, llegada a la siguiente parada y regreso. */
+  salidaMin: number | null;
+  llegadaProximaMin: number | null;
+  regresoMin: number | null;
+  /** Paquetes por pedido a bordo. */
+  pedidosCarga: { id: string; cantidad: number }[];
 }
 
 export interface PedidoVisual {

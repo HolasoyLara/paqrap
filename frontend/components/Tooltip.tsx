@@ -2,7 +2,9 @@
 
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import type { EstadoVisual } from '@/lib/tipos';
-import { claseOcupacion, ETIQUETA_OCUPACION, ETIQUETA_SEMAFORO, ETIQUETA_TIPO_VEHICULO, semaforo } from '@/lib/formato';
+import {
+  claseOcupacion, COLOR_AVERIA, ETIQUETA_OCUPACION, ETIQUETA_SEMAFORO, ETIQUETA_TIPO_VEHICULO, fechaHoraCompleta, semaforo,
+} from '@/lib/formato';
 import { ocupacionAlmacen, ocupacionVehiculo, type Seleccion } from './MapaOperacion';
 
 export interface TooltipApi {
@@ -48,6 +50,13 @@ const Tooltip = forwardRef<TooltipApi, { estado: EstadoVisual; minuto: () => num
       <>
         <div className="tt-title">Vehículo {v.id} · {ETIQUETA_TIPO_VEHICULO[v.tipo]}</div>
         <div className="tt-row"><span>Estado</span><b>{v.estadoEtiqueta}</b></div>
+        {v.tipoAveria != null && (
+          <div className="tt-row"><span>{v.estado === 'EN_TALLER' ? 'En taller' : 'Avería'}</span>
+            <b style={{ color: COLOR_AVERIA[v.tipoAveria] }}>
+              Avería tipo {v.tipoAveria} · {v.estado === 'EN_TALLER' ? 'disponible' : 'hasta'}{' '}
+              {v.finAveriaMin != null ? fechaHoraCompleta(estado.inicioMs + v.finAveriaMin * 60000) : '—'}
+            </b></div>
+        )}
         <div className="tt-row"><span>Ocupación</span>
           <b>{v.carga} / {v.capacidad} ({Math.round(ocup.pct)} %) <span className={claseOcupacion(ocup.sem)}>{ETIQUETA_OCUPACION[ocup.sem]}</span></b></div>
         {sem && <div className="tt-row"><span>Urgencia de plazo</span><b>{ETIQUETA_SEMAFORO[sem]}</b></div>}

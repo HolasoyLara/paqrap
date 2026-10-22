@@ -3,11 +3,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AlmacenVisual, EstadoVisual, VehiculoVisual } from '@/lib/tipos';
 import {
-  BORDE_VACIO, COLOR_BLOQUEO, COLOR_OCUPACION, COLOR_SEMAFORO, porcentaje, type Semaforo, semaforo, semaforoOcupacion,
+  BORDE_VACIO, COLOR_AVERIA, COLOR_BLOQUEO, COLOR_OCUPACION, COLOR_SEMAFORO, porcentaje, type Semaforo, semaforo, semaforoOcupacion,
   type SemaforoOcupacion,
 } from '@/lib/formato';
 import { posicionEnTrayectoria } from '@/lib/useEstadoSimulacion';
-import { GlifoAlmacen, GlifoPaquete, GlifoVehiculo } from './Iconos';
+import { GlifoAlmacen, GlifoLlave, GlifoPaquete, GlifoVehiculo } from './Iconos';
 
 // Reticula oficial de la ciudad: 70 x 50 km, origen (0,0) en la esquina inferior izquierda (P4).
 export const ANCHO_KM = 70;
@@ -112,6 +112,26 @@ export function urgenciaVehiculo(v: VehiculoVisual, verde: number, ambar: number
 }
 
 const sy = (y: number) => ALTO_KM - y;
+
+/** D10-D13: insignia con el numero y el color del tipo de averia, en la esquina superior derecha del icono. */
+export function InsigniaAveria({ tipo, x = 10, y = -10 }: { tipo: number; x?: number; y?: number }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <circle r={7} fill={COLOR_AVERIA[tipo] ?? GRIS} stroke="#fff" strokeWidth={1.5} />
+      <text y={3.4} textAnchor="middle" fontSize={9.5} fontWeight={800} fill={tipo === 1 ? '#1c2b36' : '#fff'}>{tipo}</text>
+    </g>
+  );
+}
+
+/** Unidad en taller: insignia blanca con una llave. */
+export function InsigniaTaller({ x = 10, y = -10 }: { x?: number; y?: number }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <circle r={7} fill="#fff" stroke={NAVY} strokeWidth={1.5} />
+      <GlifoLlave color={NAVY} />
+    </g>
+  );
+}
 
 /** Reticula de calles (1 km) con ejes cada 10 km; solo se vuelve a dibujar al cambiar el zoom. */
 const Reticula = memo(function Reticula({ escala }: { escala: number }) {
@@ -524,6 +544,8 @@ export default function MapaOperacion(props: Props) {
               {urgencia && urgencia !== 'verde' && (
                 <circle cx={-9} cy={-9} r={4.2} fill={COLOR_SEMAFORO[urgencia]} stroke="#fff" strokeWidth={1.4} />
               )}
+              {v.estado === 'AVERIADA' && v.tipoAveria != null && <InsigniaAveria tipo={v.tipoAveria} />}
+              {v.estado === 'EN_TALLER' && <InsigniaTaller />}
             </g>
           );
         })}

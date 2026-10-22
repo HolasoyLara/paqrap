@@ -52,9 +52,18 @@ public record EstadoVisual(
                                 Integer stock, List<String> arriban) {
     }
 
+    /**
+     * Unidad en el mapa. Campos agregados para la rubrica: tipo de averia (1/2/3) y su fin (minutos), horas de la
+     * ruta actual en minutos simulados (salida, llegada a la siguiente parada, regreso) y paquetes por pedido a bordo.
+     */
     public record VehiculoVisual(String id, String tipo, String estado, String estadoEtiqueta, double x, double y,
                                  int carga, int capacidad, List<String> pedidos, Double holguraMinima, String destino,
-                                 double[] tray, String base) {
+                                 double[] tray, String base, Integer tipoAveria, Double finAveriaMin, Double salidaMin,
+                                 Double llegadaProximaMin, Double regresoMin, List<CargaPedido> pedidosCarga) {
+    }
+
+    /** Paquetes de un pedido que lleva una unidad. */
+    public record CargaPedido(String id, int cantidad) {
     }
 
     public record PedidoVisual(String id, double x, double y, int cantidad, double plazo, double registroMin,

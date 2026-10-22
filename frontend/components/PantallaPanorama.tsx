@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import type { EstadoVisual } from '@/lib/tipos';
 import {
-  BORDE_VACIO, COLOR_BLOQUEO, COLOR_OCUPACION, ETIQUETA_OCUPACION, numero, semaforo, type SemaforoOcupacion, soles,
+  BORDE_VACIO, COLOR_BLOQUEO, COLOR_OCUPACION, ETIQUETA_AVERIA, ETIQUETA_OCUPACION, numero, semaforo, type SemaforoOcupacion, soles,
 } from '@/lib/formato';
 import MapaOperacion, {
-  acercar, centrarEn, FILTROS_POR_DEFECTO, type Filtros, ocupacionAlmacen, type Seleccion, type Vista, VISTA_COMPLETA, vistaDeZona,
+  acercar, centrarEn, FILTROS_POR_DEFECTO, type Filtros, InsigniaAveria, InsigniaTaller, ocupacionAlmacen, type Seleccion, type Vista, VISTA_COMPLETA, vistaDeZona,
 } from './MapaOperacion';
 
 /** Rango de ocupacion de cada color con los umbrales vigentes (verde/ambar se aplican al espacio libre). */
@@ -256,7 +256,16 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
                 Punto en la esquina = urgencia de plazo (lleva un pedido en riesgo o crítico)</div>
               <div className="legend-item"><IconoMini tipo="almacen" color="#0f3d5c" />Almacén central: sin límite de stock, no lleva semáforo</div>
               <div className="subtitulo" style={{ marginTop: 6 }}>Circunstancias</div>
-              <div className="legend-item"><IconoMini tipo="vehiculo" color="#8695a3" forma="AUTO" />Vehículo averiado o en taller</div>
+              {[1, 2, 3].map((t) => (
+                <div className="legend-item" key={t}>
+                  <svg width={18} height={18} viewBox="-9 -9 18 18" aria-hidden><InsigniaAveria tipo={t} x={0} y={0} /></svg>
+                  {ETIQUETA_AVERIA[t]} (unidad gris detenida en el lugar)
+                </div>
+              ))}
+              <div className="legend-item">
+                <svg width={18} height={18} viewBox="-9 -9 18 18" aria-hidden><InsigniaTaller x={0} y={0} /></svg>
+                Unidad en taller (visible con «Mostrar unidades en almacén»)
+              </div>
               <div className="legend-item"><span className="legend-line" style={{ borderColor: COLOR_BLOQUEO, borderTopWidth: 5 }} />Calle bloqueada (dato real del curso)</div>
               <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#a15b16', borderTopWidth: 5 }} />Calle bloqueada manualmente (clic en el mapa)</div>
               <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#0f3d5c' }} />Ruta asignada (más tenue = vehículo no seleccionado)</div>

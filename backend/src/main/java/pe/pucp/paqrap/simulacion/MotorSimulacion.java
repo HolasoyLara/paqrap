@@ -1395,14 +1395,21 @@ public class MotorSimulacion {
                 String destino = "";
                 double[] tray = new double[0];
                 int carga = 0;
+                Double salidaMin = null, llegadaProximaMin = null, regresoMin = null;
+                Map<String, Integer> cargaPorPedido = new LinkedHashMap<>();
                 if (r != null) {
                     double km = r.getTrayectoria().kmHasta(t);
                     kmActivo += km;
                     costoActivo += km * v.getCostoPorKm();
                     carga = r.cargaEn(t);
+                    salidaMin = minutos(r.getHoraInicio());
+                    regresoMin = minutos(r.getHoraRegreso());
+                    ParadaEnCurso proxima = r.siguienteParada();
+                    llegadaProximaMin = proxima != null ? minutos(proxima.getHoraLlegada()) : regresoMin;
                     for (ParadaEnCurso p : r.getParadas()) {
                         if (!p.estaPendiente()) continue;
                         String origen = p.getParte().getIdPedidoOrigen();
+                        cargaPorPedido.merge(origen, p.getParte().getCantidadUnidades(), Integer::sum);
                         if (!aBordo.contains(origen)) aBordo.add(origen);
                         double h = p.getParte().calcularHolguraPorcentaje(t);
                         if (holguraMin == null || h < holguraMin) holguraMin = h;
@@ -1412,9 +1419,20 @@ public class MotorSimulacion {
                             : (r.getParadas().isEmpty() ? "Reubicación a " : "Retorno a ") + r.getAlmacenRetorno().getNombre();
                     tray = aplanar(r.getTrayectoria().restanteCompacto(t));
                 }
+                // averia vigente (D10-D13): en el lugar hasta el fin de la inmovilizacion; en taller hasta que vuelve a estar disponible
+                Integer tipoAveria = null;
+                Double finAveriaMin = null;
+                Averia av = vs.getAveria();
+                if (av != null && (estado == EstadoUnidad.AVERIADA || estado == EstadoUnidad.EN_TALLER)) {
+                    tipoAveria = av.getTipo().getNumero();
+                    finAveriaMin = minutos(estado == EstadoUnidad.AVERIADA ? av.getHoraFinInmovilizacion() : av.getHoraDisponible());
+                }
+                List<EstadoVisual.CargaPedido> pedidosCarga = new ArrayList<>();
+                cargaPorPedido.forEach((id, cant) -> pedidosCarga.add(new EstadoVisual.CargaPedido(id, cant)));
                 listaVehiculos.add(new EstadoVisual.VehiculoVisual(v.getIdVehiculo(), v.getTipo().name(), estado.name(), estado.getEtiqueta(),
                         redondear(pos[0], 3), redondear(pos[1], 3), carga, v.getCapacidadPaquetes(), aBordo,
-                        holguraMin == null ? null : redondear(holguraMin, 1), destino, tray, v.getAlmacenBase().getNombre()));
+                        holguraMin == null ? null : redondear(holguraMin, 1), destino, tray, v.getAlmacenBase().getNombre(),
+                        tipoAveria, finAveriaMin, salidaMin, llegadaProximaMin, regresoMin, pedidosCarga));
             }
 
             List<EstadoVisual.PedidoVisual> listaPedidos = new ArrayList<>();

@@ -66,6 +66,12 @@ export const ETIQUETA_OCUPACION: Record<SemaforoOcupacion, string> = {
   vacio: 'Vacío', verde: 'Poca carga', ambar: 'Carga media', rojo: 'Casi lleno / lleno',
 };
 
+/** D10-D13: color de la insignia de cada tipo de averia (amarillo, naranja, morado). */
+export const COLOR_AVERIA: Record<number, string> = { 1: '#e0b000', 2: '#e8730c', 3: '#6a1b9a' };
+export const ETIQUETA_AVERIA: Record<number, string> = {
+  1: 'Avería tipo 1 · leve', 2: 'Avería tipo 2 · moderada', 3: 'Avería tipo 3 · grave',
+};
+
 /** Clase CSS de la pildora (ocupacion-pill ocup-xxx). */
 export const claseOcupacion = (s: SemaforoOcupacion) => 'ocupacion-pill ocup-' + s;
 

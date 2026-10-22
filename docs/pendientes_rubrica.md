@@ -8,8 +8,8 @@ Estado: ⬜ pendiente · 🔄 en curso · ✅ hecho
 | Fase | Ítems | Estado |
 |---|---|---|
 | 1. Solo frontend: tiempos, semáforo de ocupación, KPI globales, tramos, español | C12–C16, C21, C27, C28, G01–G04, B11, C07 | ✅ |
-| 2. Backend + frontend: averías por tipo y horarios de la UT | D10–D13 (+ datos para E06, E13) | 🔄 |
-| 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | ⬜ |
+| 2. Backend + frontend: averías por tipo y horarios de la UT | D10–D13 (+ datos para E06, E13) | ✅ |
+| 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | 🔄 |
 | 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | ⬜ |
 | 5. Cierre con la última planificación | G08–G10 | ⬜ |
 | 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | ⬜ |
@@ -26,8 +26,14 @@ Hecho:
 - `PantallaPanorama.tsx`: leyenda con los 4 estados de ocupación, el central «sin límite», la urgencia y los bloqueos; se quitó `map-overlay-hora`.
 - `ModalDetalle.tsx`: ruta como lista de tramos origen → destino con salida y llegada (B11); «Llegada estimada»; ocupación en la UT y en el almacén.
 - C07: «Rutas recalculadas», eventos del Cierre con etiquetas en español y banner de error sin términos técnicos (`page.tsx`).
-### Fase 2
-Archivos: `backend/.../visualizador/EstadoVisual.java` (VehiculoVisual), `backend/.../simulacion/MotorSimulacion.java` (construirEstadoVisual), `frontend/lib/tipos.ts`, `MapaOperacion.tsx`, `Tooltip.tsx`.
+
+### Fase 2 ✅
+Hecho:
+- `EstadoVisual.java`: `VehiculoVisual` + `tipoAveria`, `finAveriaMin`, `salidaMin`, `llegadaProximaMin`, `regresoMin` y `pedidosCarga` (nuevo record `CargaPedido{id, cantidad}`). Solo se agregaron campos al final.
+- `MotorSimulacion.construirEstadoVisual`: los llena desde `vs.getAveria()` y la ruta en curso (sin tocar la simulación).
+- `tipos.ts`: los mismos campos.
+- `MapaOperacion.tsx`: `InsigniaAveria` (insignia con número, tipo 1 amarillo, 2 naranja, 3 morado) mientras está AVERIADA; `InsigniaTaller` (llave) en EN_TALLER.
+- Leyenda con los 3 tipos y el taller; tooltip «Avería tipo N · hasta dd/mm/aaaa hh:mm».
 
 ### Fase 3
 Archivos: `frontend/components/PanelListas.tsx` (nuevo), `PantallaPanorama.tsx`, `MapaOperacion.tsx` (Filtros), `ModalDetalle.tsx`, `app/page.tsx`.
