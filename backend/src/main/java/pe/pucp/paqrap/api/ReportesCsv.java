@@ -100,14 +100,14 @@ final class ReportesCsv {
         if (up != null) {
             sb.append('\n').append("Ultima planificacion estable;").append(up.fecha()).append(';').append(up.causa()).append('\n');
             sb.append("Unidad;Tipo;Ruta;Almacen de salida;Salida;Paradas (pedido x paquetes @ llegada);Almacen de retorno;Regreso\n");
-            for (CierreCorrida.RutaVigente r : up.rutas()) {
+            for (CierreCorrida.RutaVigente rv : up.rutas()) {
                 StringBuilder paradas = new StringBuilder();
-                for (CierreCorrida.ParadaPlan p : r.paradas()) {
+                for (CierreCorrida.ParadaPlan p : rv.paradas()) {
                     if (paradas.length() > 0) paradas.append(" | ");
                     paradas.append(p.pedido()).append(" x").append(p.cantidad()).append(" @ ").append(p.llegada());
                 }
-                sb.append(r.vehiculo()).append(';').append(r.tipo()).append(';').append(r.ruta()).append(';').append(r.almacenSalida()).append(';')
-                        .append(r.salida()).append(';').append(paradas).append(';').append(r.almacenRetorno()).append(';').append(r.regreso()).append('\n');
+                sb.append(rv.vehiculo()).append(';').append(rv.tipo()).append(';').append(rv.ruta()).append(';').append(rv.almacenSalida()).append(';')
+                        .append(rv.salida()).append(';').append(paradas).append(';').append(rv.almacenRetorno()).append(';').append(rv.regreso()).append('\n');
             }
         }
         return sb.toString();

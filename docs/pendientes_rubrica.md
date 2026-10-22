@@ -3,6 +3,8 @@
 Guía: [auditoria_rubrica.md](auditoria_rubrica.md) (archivos y líneas) y [rubrica_evaluacion_sw.md](rubrica_evaluacion_sw.md).
 Cada fase termina con `npm run typecheck` (frontend), `mvnw -q -DskipTests compile` (si se tocó el backend) y un commit «Rúbrica fase N: …».
 
+> **Importante:** compile y pruebe el backend con `mvnw -q clean test` (o `clean compile`). Sin `clean`, la extensión Java de VS Code puede dejar clases a medio compilar en `target/` y ocultar errores reales o provocar fallos falsos («Unresolved compilation problem»).
+
 Estado: ⬜ pendiente · 🔄 en curso · ✅ hecho
 
 | Fase | Ítems | Estado |
