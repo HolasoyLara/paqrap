@@ -43,8 +43,10 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
   const [zona, setZona] = useState('full');
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_POR_DEFECTO);
   const [verFiltros, setVerFiltros] = useState(false);
-  const [leyenda, setLeyenda] = useState(true);
-  const [metricas, setMetricas] = useState(true);
+  // "mapa libre": todos los paneles empiezan recogidos y se abren a demanda
+  const [leyenda, setLeyenda] = useState(false);
+  const [metricas, setMetricas] = useState(false);
+  const [verBuscar, setVerBuscar] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; cx: number; cy: number } | null>(null);
@@ -126,101 +128,8 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
 
   const semCumplimiento = semaforo(k.cumplimiento, 95, 85);
   return (
-    <section>
-      <h2>Panorama operativo</h2>
-      <p className="note">
-        Vista principal en vivo de la corrida. El reloj de la simulación nunca es manipulable directamente por el usuario. Haz clic
-        sobre cualquier tramo de calle del mapa para insertar (o quitar) un bloqueo manual y ver cómo el sistema recalcula las rutas
-        afectadas; los tramos ya bloqueados por los datos reales del curso no se pueden alterar desde aquí. Pasa el mouse sobre un
-        vehículo, un punto de entrega o un almacén para ver su resumen; haz clic sobre él para abrir su detalle completo. Rueda del
-        mouse: zoom; arrastrar: desplazar.
-      </p>
-      <p className="hint" style={{ marginBottom: 12 }}>
-        {diaADia
-          ? 'En este escenario también puedes hacer clic cerca de un cruce del mapa para insertar un pedido nuevo a mano (eliges el tipo de entrega y se asigna automáticamente a la unidad disponible).'
-          : 'La inserción manual de pedidos solo está disponible en el escenario «Operación día a día» — cámbialo en Parámetros (pantalla 1) para probarla.'}
-      </p>
-      {estado.mensaje && <div className="banner banner-error">{estado.mensaje}</div>}
-      {estado.colapso && (
-        <div className="banner banner-error">
-          <b>Colapso logístico detectado</b> el {estado.colapso.fecha}: {estado.colapso.motivo}. Cumplimiento en ese momento: {numero(estado.colapso.cumplimiento, 1)} %.
-        </div>
-      )}
-
-      {metricas && (
-        <div className="kpi-strip">
-          <Kpi etiqueta="Cumplimiento a tiempo" valor={`${numero(k.cumplimiento, 1)} %`} sub={`${numero(k.registrados - k.incumplidos)} de ${numero(k.registrados)} pedidos no vencidos`} sem={k.registrados ? semCumplimiento : null} />
-          <Kpi etiqueta="Pedidos" valor={`${numero(k.entregados)} entregados`} sub={`${numero(k.enCurso)} en ruta · ${numero(k.pendientes)} por despachar`} />
-          <Kpi etiqueta="Costo acumulado" valor={soles(k.costo)} sub={`${numero(k.km)} km recorridos según tipo de vehículo`} />
-          <Kpi etiqueta="Flota activa" valor={`${k.flotaActiva} / ${k.flotaTotal}`} sub="vehículos operativos (sin avería ni mantenimiento)" />
-          <Kpi etiqueta="Almacén central" valor="Sin límite" sub="Abastecimiento permanente (sin capacidad máxima)" />
-          {intermedios.map((a) => {
-            const pct = a.capacidad ? (100 * (a.stock ?? 0)) / a.capacidad : 0;
-            return (
-              <Kpi key={a.id} etiqueta={`Stock ${a.nombre}`} valor={`${numero(a.stock ?? 0)} / ${numero(a.capacidad ?? 0)}`}
-                sub="recarga diaria 23:59:59" sem={semaforo(pct, estado.umbralVerde, estado.umbralAmbar)} />
-            );
-          })}
-          <Kpi etiqueta="Re-ruteos totales" valor={String(k.reRuteosBloqueo + k.reRuteosAveria)}
-            sub={`bloqueo: ${k.reRuteosBloqueo} · avería: ${k.reRuteosAveria} · reasignaciones: ${k.reasignaciones}`} />
-        </div>
-      )}
-
-      <div className="card map-card">
-        <div className="map-toolbar">
-          <div className="zone-select">
-            <label>
-              Zona visible del mapa <span className="hint">(vista local a este dispositivo, no se sincroniza)</span>
-              <select value={zona} onChange={(e) => setZona(e.target.value)}>
-                <option value="full">Vista completa</option>
-                <option value="noroeste">Cuadrante noroeste</option>
-                <option value="noreste">Cuadrante noreste</option>
-                <option value="suroeste">Cuadrante suroeste</option>
-                <option value="sureste">Cuadrante sureste</option>
-              </select>
-            </label>
-          </div>
-          <div className="track-pedido">
-            <label>
-              Buscar pedido por ID
-              <div className="track-row">
-                <input value={busqueda} placeholder="ej. PV2609-0001" onChange={(e) => setBusqueda(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } }} />
-                <button className="btn btn-ghost" type="button" onClick={buscar}>Buscar</button>
-              </div>
-            </label>
-            {errorBusqueda && <span className="error-texto">{errorBusqueda}</span>}
-          </div>
-          <div className="zoom-controls">
-            <button title="Alejar" onClick={() => setVista((v) => acercar(v, 1 / 1.25))}>−</button>
-            <button title="Restablecer zoom" onClick={() => setVista(vistaDeZona(zona))}>100%</button>
-            <button title="Acercar" onClick={() => setVista((v) => acercar(v, 1.25))}>+</button>
-            <button className="btn-toggle" onClick={() => setLeyenda((x) => !x)}>{leyenda ? 'Ocultar leyenda' : 'Mostrar leyenda'}</button>
-            <button className="btn-toggle" onClick={() => setMetricas((x) => !x)}>{metricas ? 'Ocultar métricas' : 'Mostrar métricas'}</button>
-            <button className="btn-toggle" onClick={() => setVerFiltros((x) => !x)}>Filtros{verFiltros ? ' ▴' : ' ▾'}</button>
-            {verFiltros && (
-              <div className="filtros-panel" onClick={(e) => e.stopPropagation()}>
-                <label><input type="checkbox" checked={filtros.soloCriticos} onChange={(e) => setFiltros({ ...filtros, soloCriticos: e.target.checked })} />Solo pedidos en riesgo o críticos</label>
-                <label><input type="checkbox" checked={filtros.mostrarPedidos} onChange={(e) => setFiltros({ ...filtros, mostrarPedidos: e.target.checked })} />Mostrar pedidos</label>
-                <label><input type="checkbox" checked={filtros.mostrarBloqueos} onChange={(e) => setFiltros({ ...filtros, mostrarBloqueos: e.target.checked })} />Mostrar calles bloqueadas</label>
-                <label><input type="checkbox" checked={filtros.unidadesEnAlmacen} onChange={(e) => setFiltros({ ...filtros, unidadesEnAlmacen: e.target.checked })} />Mostrar unidades en almacén</label>
-                <div className="subtitulo" style={{ marginTop: 4 }}>Tipos de vehículo</div>
-                {(['AUTO', 'MOTO', 'BICICLETA'] as const).map((t) => (
-                  <label key={t}><input type="checkbox" checked={filtros.tipos[t]} onChange={(e) => setFiltros({ ...filtros, tipos: { ...filtros.tipos, [t]: e.target.checked } })} />
-                    {t === 'AUTO' ? 'Autos' : t === 'MOTO' ? 'Motos' : 'Bicicletas'}</label>
-                ))}
-                <label>Rutas
-                  <select value={filtros.rutas} onChange={(e) => setFiltros({ ...filtros, rutas: e.target.value as Filtros['rutas'] })}>
-                    <option value="todas">Todas (tenues) y la seleccionada resaltada</option>
-                    <option value="seleccionada">Solo la del vehículo seleccionado</option>
-                    <option value="ninguna">Ninguna</option>
-                  </select>
-                </label>
-              </div>
-            )}
-          </div>
-        </div>
-
+    <section className="panorama">
+      <div className="mapa-pantalla">
         <MapaOperacion
           estado={estado}
           minutoAhora={minutoAhora}
@@ -234,20 +143,111 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
           onClicCruce={diaADia && enCurso ? alClicCruce : null}
         />
 
-        {leyenda && (
-          <div className="legend">
-            <div className="legend-item"><IconoMini tipo="pedido" color="#2e7d46" />Paquete = pedido a tiempo</div>
-            <div className="legend-item"><IconoMini tipo="pedido" color="#c98a10" />Paquete = pedido en riesgo</div>
-            <div className="legend-item"><IconoMini tipo="pedido" color="#c0392b" />Paquete = pedido vencido / crítico</div>
-            <div className="legend-item"><IconoMini tipo="vehiculo" color="#0f3d5c" forma="AUTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="MOTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="BICICLETA" />Auto / moto / bicicleta (color = pedido más urgente a bordo)</div>
-            <div className="legend-item"><IconoMini tipo="vehiculo" color="#8695a3" forma="AUTO" />Vehículo averiado</div>
-            <div className="legend-item"><IconoMini tipo="almacen" color={central ? '#0f3d5c' : '#0f3d5c'} />Edificio = almacén (color = semáforo de su stock; el central no aplica)</div>
-            <div className="legend-item"><span className="legend-line" style={{ borderColor: '#c0392b', borderTopWidth: 5 }} />Calle bloqueada (dato real del curso)</div>
-            <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#a15b16', borderTopWidth: 5 }} />Calle bloqueada manualmente (clic en el mapa)</div>
-            <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#0f3d5c' }} />Ruta asignada (más tenue = vehículo no seleccionado)</div>
-            <div className="legend-item"><span className="hint">Retícula de 70 × 50 km; cada línea es una calle (1 km). Hora simulada: {fechaHoraCorta(estado.inicioMs + minutoAhora() * 60000)}.</span></div>
+        <div className="mapa-controles" onPointerDown={(e) => e.stopPropagation()}>
+          <button className={'btn-flot' + (metricas ? ' activo' : '')} onClick={() => setMetricas((x) => !x)}>Métricas</button>
+          <button className={'btn-flot' + (leyenda ? ' activo' : '')} onClick={() => setLeyenda((x) => !x)}>Leyenda</button>
+          <button className={'btn-flot' + (verFiltros ? ' activo' : '')} onClick={() => setVerFiltros((x) => !x)}>Filtros</button>
+          <button className={'btn-flot' + (verBuscar ? ' activo' : '')} onClick={() => setVerBuscar((x) => !x)}>Buscar pedido</button>
+          <span className="sep-flot" />
+          <button className="btn-flot" title="Alejar" onClick={() => setVista((v) => acercar(v, 1 / 1.25))}>−</button>
+          <button className="btn-flot" title="Restablecer zoom" onClick={() => setVista(vistaDeZona(zona))}>100%</button>
+          <button className="btn-flot" title="Acercar" onClick={() => setVista((v) => acercar(v, 1.25))}>+</button>
+        </div>
+
+        {estado.mensaje && <div className="banner banner-error mapa-aviso">{estado.mensaje}</div>}
+        {estado.colapso && (
+          <div className="banner banner-error mapa-aviso">
+            <b>Colapso logístico detectado</b> el {estado.colapso.fecha}: {estado.colapso.motivo}. Cumplimiento en ese momento: {numero(estado.colapso.cumplimiento, 1)} %.
           </div>
         )}
+
+        {verBuscar && (
+          <div className="panel-flot panel-buscar" onPointerDown={(e) => e.stopPropagation()}>
+            <label>Buscar pedido por ID
+              <div className="track-row">
+                <input value={busqueda} placeholder="ej. PV2609-0001" autoFocus onChange={(e) => setBusqueda(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } }} />
+                <button className="btn btn-ghost" type="button" onClick={buscar}>Buscar</button>
+              </div>
+            </label>
+            {errorBusqueda && <span className="error-texto">{errorBusqueda}</span>}
+          </div>
+        )}
+
+        {verFiltros && (
+          <div className="panel-flot panel-filtros" onPointerDown={(e) => e.stopPropagation()}>
+            <label>Zona visible <span className="hint">(solo en este dispositivo)</span>
+              <select value={zona} onChange={(e) => setZona(e.target.value)}>
+                <option value="full">Vista completa</option>
+                <option value="noroeste">Cuadrante noroeste</option>
+                <option value="noreste">Cuadrante noreste</option>
+                <option value="suroeste">Cuadrante suroeste</option>
+                <option value="sureste">Cuadrante sureste</option>
+              </select>
+            </label>
+            <label><input type="checkbox" checked={filtros.soloCriticos} onChange={(e) => setFiltros({ ...filtros, soloCriticos: e.target.checked })} />Solo pedidos en riesgo o críticos</label>
+            <label><input type="checkbox" checked={filtros.mostrarPedidos} onChange={(e) => setFiltros({ ...filtros, mostrarPedidos: e.target.checked })} />Mostrar pedidos</label>
+            <label><input type="checkbox" checked={filtros.mostrarBloqueos} onChange={(e) => setFiltros({ ...filtros, mostrarBloqueos: e.target.checked })} />Mostrar calles bloqueadas</label>
+            <label><input type="checkbox" checked={filtros.unidadesEnAlmacen} onChange={(e) => setFiltros({ ...filtros, unidadesEnAlmacen: e.target.checked })} />Mostrar unidades en almacén</label>
+            <div className="subtitulo" style={{ marginTop: 4 }}>Tipos de vehículo</div>
+            {(['AUTO', 'MOTO', 'BICICLETA'] as const).map((t) => (
+              <label key={t}><input type="checkbox" checked={filtros.tipos[t]} onChange={(e) => setFiltros({ ...filtros, tipos: { ...filtros.tipos, [t]: e.target.checked } })} />
+                {t === 'AUTO' ? 'Autos' : t === 'MOTO' ? 'Motos' : 'Bicicletas'}</label>
+            ))}
+            <label>Rutas
+              <select value={filtros.rutas} onChange={(e) => setFiltros({ ...filtros, rutas: e.target.value as Filtros['rutas'] })}>
+                <option value="todas">Todas (tenues) y la seleccionada resaltada</option>
+                <option value="seleccionada">Solo la del vehículo seleccionado</option>
+                <option value="ninguna">Ninguna</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        {metricas && (
+          <div className="kpi-strip mapa-kpis" onPointerDown={(e) => e.stopPropagation()}>
+            <Kpi etiqueta="Cumplimiento a tiempo" valor={`${numero(k.cumplimiento, 1)} %`} sub={`${numero(k.registrados - k.incumplidos)} de ${numero(k.registrados)} pedidos no vencidos`} sem={k.registrados ? semCumplimiento : null} />
+            <Kpi etiqueta="Pedidos" valor={`${numero(k.entregados)} entregados`} sub={`${numero(k.enCurso)} en ruta · ${numero(k.pendientes)} por despachar`} />
+            <Kpi etiqueta="Costo acumulado" valor={soles(k.costo)} sub={`${numero(k.km)} km recorridos según tipo de vehículo`} />
+            <Kpi etiqueta="Flota activa" valor={`${k.flotaActiva} / ${k.flotaTotal}`} sub="vehículos operativos (sin avería ni mantenimiento)" />
+            <Kpi etiqueta="Almacén central" valor="Sin límite" sub="Abastecimiento permanente (sin capacidad máxima)" />
+            {intermedios.map((a) => {
+              const pct = a.capacidad ? (100 * (a.stock ?? 0)) / a.capacidad : 0;
+              return (
+                <Kpi key={a.id} etiqueta={`Stock ${a.nombre}`} valor={`${numero(a.stock ?? 0)} / ${numero(a.capacidad ?? 0)}`}
+                  sub="recarga diaria 23:59:59" sem={semaforo(pct, estado.umbralVerde, estado.umbralAmbar)} />
+              );
+            })}
+            <Kpi etiqueta="Re-ruteos totales" valor={String(k.reRuteosBloqueo + k.reRuteosAveria)}
+              sub={`bloqueo: ${k.reRuteosBloqueo} · avería: ${k.reRuteosAveria} · reasignaciones: ${k.reasignaciones}`} />
+          </div>
+        )}
+
+        {leyenda && (
+          <div className="panel-flot panel-leyenda" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="legend">
+              <div className="legend-item"><IconoMini tipo="pedido" color="#2e7d46" />Paquete = pedido a tiempo</div>
+              <div className="legend-item"><IconoMini tipo="pedido" color="#c98a10" />Paquete = pedido en riesgo</div>
+              <div className="legend-item"><IconoMini tipo="pedido" color="#c0392b" />Paquete = pedido vencido / crítico</div>
+              <div className="legend-item"><IconoMini tipo="vehiculo" color="#0f3d5c" forma="AUTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="MOTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="BICICLETA" />Auto / moto / bicicleta (color = pedido más urgente a bordo)</div>
+              <div className="legend-item"><IconoMini tipo="vehiculo" color="#8695a3" forma="AUTO" />Vehículo averiado</div>
+              <div className="legend-item"><IconoMini tipo="almacen" color="#0f3d5c" />Edificio = almacén (color = semáforo de su stock; el central no aplica)</div>
+              <div className="legend-item"><span className="legend-line" style={{ borderColor: '#c0392b', borderTopWidth: 5 }} />Calle bloqueada (dato real del curso)</div>
+              <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#a15b16', borderTopWidth: 5 }} />Calle bloqueada manualmente (clic en el mapa)</div>
+              <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#0f3d5c' }} />Ruta asignada (más tenue = vehículo no seleccionado)</div>
+              <div className="legend-item"><span className="hint">Retícula de 70 × 50 km; cada línea es una calle (1 km).</span></div>
+            </div>
+            <p className="hint" style={{ margin: '10px 0 0' }}>
+              Pasa el mouse sobre un vehículo, pedido o almacén para ver su resumen y haz clic para abrir su detalle en el panel lateral.
+              Clic en un tramo de calle: bloquea o reabre ese tramo. Rueda: zoom · arrastrar: desplazar.{' '}
+              {diaADia
+                ? 'En «Operación día a día», clic cerca de un cruce para registrar un pedido nuevo.'
+                : 'El registro manual de pedidos solo está disponible en «Operación día a día».'}
+            </p>
+          </div>
+        )}
+
+        <div className="map-overlay-hora">Hora simulada: {fechaHoraCorta(estado.inicioMs + minutoAhora() * 60000)}</div>
       </div>
 
       <Tooltip ref={tooltip} estado={estado} minuto={minutoAhora} />

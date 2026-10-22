@@ -127,25 +127,29 @@ export default function MapaOperacion(props: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const lineaHoverRef = useRef<SVGLineElement>(null);
   const vehiculosRef = useRef(new Map<string, SVGGElement>());
-  const [anchoPx, setAnchoPx] = useState(1000);
+  const [tam, setTam] = useState({ w: 1000, h: 700 });
   const [arrastrando, setArrastrando] = useState(false);
   const arrastre = useRef<{ x: number; y: number; vista: Vista; movido: boolean } | null>(null);
 
-  // el SVG conserva la proporcion de la ciudad y se limita al alto de la ventana: se mide su ancho real
+  // el SVG llena todo el contenedor (pantalla completa): se mide su tamano real y el viewBox toma su proporcion
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entradas) => {
-      const w = entradas[0]?.contentRect.width;
-      if (w) setAnchoPx(w);
+      const r = entradas[0]?.contentRect;
+      if (r && r.width && r.height) setTam({ w: r.width, h: r.height });
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const alto = (vista.ancho * VB_H) / VB_W;
-  const viewBox = `${vista.cx - vista.ancho / 2} ${vista.cy - alto / 2} ${vista.ancho} ${alto}`;
-  const escala = vista.ancho / Math.max(240, anchoPx); // km por pixel
+  // la vista garantiza que se vea al menos la region pedida; si el contenedor es mas ancho o mas alto, muestra mas ciudad
+  const altoVista = (vista.ancho * VB_H) / VB_W;
+  const proporcion = tam.w / Math.max(1, tam.h);
+  const anchoVis = proporcion > VB_W / VB_H ? altoVista * proporcion : vista.ancho;
+  const altoVis = anchoVis / proporcion;
+  const viewBox = `${vista.cx - anchoVis / 2} ${vista.cy - altoVis / 2} ${anchoVis} ${altoVis}`;
+  const escala = anchoVis / Math.max(240, tam.w); // km por pixel
   const escalaRef = useRef(escala);
   escalaRef.current = escala;
   const verde = estado.umbralVerde;
@@ -258,7 +262,7 @@ export default function MapaOperacion(props: Props) {
         props.onHover(null, 0, 0);
       }
       if (a.movido) {
-        const f = a.vista.ancho / Math.max(240, anchoPx);
+        const f = escalaRef.current;
         onVista(limitar({ cx: a.vista.cx - dx * f, cy: a.vista.cy - dy * f, ancho: a.vista.ancho }));
         ocultarLinea();
         return;
@@ -387,7 +391,7 @@ export default function MapaOperacion(props: Props) {
       }}
     >
       <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet"
-        style={{ aspectRatio: `${VB_W} / ${VB_H}`, width: `min(100%, calc(74vh * ${VB_W} / ${VB_H}))`, margin: '0 auto' }}
+        style={{ width: '100%', height: '100%' }}
         xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mapa de la ciudad con la operación en curso">
         <rect x={-50} y={-50} width={VB_W + 100} height={VB_H + 100} fill="#fbfcfe" />
         <Reticula escala={Math.round(escala * 1000) / 1000} />
@@ -445,6 +449,9 @@ export default function MapaOperacion(props: Props) {
               <GlifoAlmacen />
               <text y={27} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0a2c43" stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
                 {a.nombre}
+              </text>
+              <text y={39} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={color} stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
+                {a.capacidad == null ? 'Stock: sin límite' : `Stock ${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(pct ?? 0)} %)`}
               </text>
               {n > 0 && (
                 <g transform="translate(14,-14)">

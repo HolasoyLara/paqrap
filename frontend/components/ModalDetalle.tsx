@@ -158,19 +158,25 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
         <h3>Vehículo {v.id} · {v.tipo}</h3>
         <span className={'semaforo-pill ' + (v.averia ? 'semaforo-rojo' : 'semaforo-gris')}>{v.estado}</span>
         <div style={{ height: 14 }} />
+        <div className="carga-barra" title="Carga actual / capacidad">
+          <div className="carga-texto"><span>Carga</span><b>{v.carga} / {v.capacidad} paquetes</b></div>
+          <div className="progreso"><div style={{ width: `${v.capacidad ? Math.min(100, (100 * v.carga) / v.capacidad) : 0}%` }} /></div>
+        </div>
+        <div style={{ height: 12 }} />
         <Kv pares={[
           ['Almacén base', v.almacenBase],
-          ['Carga actual / capacidad', `${v.carga} / ${v.capacidad} paquetes`],
-          ['Velocidad · costo', `${v.velocidad} km/h · S/ ${v.costoKm.toFixed(2)} por km`],
           ['Turno vigente', v.turnoActual || '—'],
-          ['Alimentación del conductor', v.horasAlimentacion.join(', ')],
-          ['Próximo mantenimiento', v.proximoMantenimiento],
-          ['Pedidos a bordo', v.pedidosABordo.length ? v.pedidosABordo.join(', ') : 'Ninguno'],
+          ['Velocidad · costo', `${v.velocidad} km/h · S/ ${v.costoKm.toFixed(2)} por km`],
+          ['Posición', `(${numero(v.x, 1)}, ${numero(v.y, 1)}) km`],
           ['Próxima parada', v.proximaParada],
           ['ETA', v.eta],
+          ['Próximo mantenimiento', v.proximoMantenimiento],
           ['Avería', v.averia ?? 'Sin avería'],
+          // la alimentación solo se muestra si la pausa ya ocurrió en la corrida
+          ...(v.horasAlimentacion.length
+            ? [['Pausa de alimentación', v.horasAlimentacion.join(' · ')] as [string, React.ReactNode]]
+            : []),
           ['Acumulado en la corrida', `${v.rutasRealizadas} rutas · ${v.entregas} entregas · ${numero(v.km, 1)} km · ${soles(v.costo)}`],
-          ['Posición', `(${numero(v.x, 1)}, ${numero(v.y, 1)}) km`],
         ]} />
         {enCurso && (
           <div className="acciones-modal">
@@ -187,28 +193,29 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
               Ruta {v.ruta.id} · {v.ruta.causa} · sale de {v.ruta.almacenSalida} ({v.ruta.salida}) · regresa a {v.ruta.almacenRetorno} (~{v.ruta.regresoEstimado})
             </p>
             {v.ruta.paradas.length ? (
-              <div className="tabla-scroll" style={{ maxHeight: 240 }}>
-                <table className="daily-table">
-                  <thead>
-                    <tr><th>#</th><th>Pedido</th><th>Destino</th><th className="num">Paq.</th><th>Llegada</th><th>Límite</th><th>Estado</th></tr>
-                  </thead>
-                  <tbody>
-                    {v.ruta.paradas.map((p) => (
-                      <tr key={p.secuencia + p.pedido} className="fila-click" onClick={() => onAbrir({ tipo: 'pedido', id: p.pedido })}>
-                        <td>{p.secuencia}</td>
-                        <td>{p.pedido}</td>
-                        <td>({p.x}, {p.y})</td>
-                        <td className="num">{p.cantidad}</td>
-                        <td>{p.llegada}</td>
-                        <td>{p.limite}</td>
-                        <td>
+              <>
+                <p className="hint" style={{ margin: '0 0 8px' }}>
+                  {v.ruta.paradas.length === 1 ? '1 pedido en la ruta' : `${v.ruta.paradas.length} pedidos en la ruta, en orden de entrega`}
+                  {' · '}{v.ruta.paradas.reduce((t, p) => t + p.cantidad, 0)} paquetes en total
+                </p>
+                <ol className="paradas-lista">
+                  {v.ruta.paradas.map((p) => {
+                    const actual = p.estado === 'Entregando' || (p.estado === 'Pendiente' && v.ruta!.paradas.find((q) => q.estado === 'Pendiente') === p);
+                    return (
+                      <li key={p.secuencia + p.pedido} className={'parada-card' + (actual ? ' actual' : '') + (p.estado === 'Entregada' ? ' hecha' : '')}
+                        onClick={() => onAbrir({ tipo: 'pedido', id: p.pedido })}>
+                        <div className="parada-cab">
+                          <span className="parada-num">{p.secuencia}</span>
+                          <b>{p.pedido}</b>
                           <span className={'semaforo-pill ' + (p.aTiempo ? 'semaforo-verde' : 'semaforo-rojo')}>{p.estado}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                        <div className="parada-det">{p.cantidad} paq. → ({p.x}, {p.y}) · cliente {p.cliente}</div>
+                        <div className="parada-det">Llegada {p.llegada} · límite {p.limite}</div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
             ) : (
               <p className="empty-hint">Se reubica sin carga hacia otro almacén.</p>
             )}
@@ -310,12 +317,11 @@ export default function ModalDetalle({ seleccion, enCurso, diaADia, verde, ambar
     );
   }
 
+  // panel lateral: deja el mapa visible (no lo tapa); se cierra con la X o con Esc
   return (
-    <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}>
-      <div className="modal" role="dialog" aria-modal="true">
-        <button className="modal-close" type="button" aria-label="Cerrar" onClick={onCerrar}>×</button>
-        {cuerpo}
-      </div>
-    </div>
+    <aside className="panel-lateral" role="complementary" aria-label="Detalle">
+      <button className="modal-close" type="button" aria-label="Cerrar" onClick={onCerrar}>×</button>
+      {cuerpo}
+    </aside>
   );
 }

@@ -44,6 +44,13 @@ function formularioInicial(c: Configuracion): ParametrosCorrida {
   };
 }
 
+/** "2026-09" + 1 = "2026-10". */
+function mesMasN(mes: string, n: number): string {
+  const [a, m] = mes.split('-').map(Number);
+  const total = a * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+
 function conSegundos(f: string | null): string | null {
   if (!f) return null;
   return f.length === 16 ? f + ':00' : f;
@@ -66,8 +73,19 @@ export default function Pagina() {
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [cierre, setCierre] = useState<CierreCorrida | null>(null);
   const [avisos, setAvisos] = useState<AvisoLocal[]>([]);
+  const cabecera = useRef<HTMLDivElement>(null);
+  const [altoCabecera, setAltoCabecera] = useState(110);
   const primerEstado = useRef(true);
   const estadoPrevio = useRef<string | null>(null);
+
+  // el panel lateral y el mapa a pantalla completa se ubican justo debajo de la cabecera
+  useEffect(() => {
+    const el = cabecera.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAltoCabecera(el.getBoundingClientRect().height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // cada pestana empieza arriba
   useEffect(() => {
@@ -166,14 +184,24 @@ export default function Pagina() {
     }
   };
 
-  const subirArchivo = async (tipo: string, archivo: File) => {
-    try {
-      const r = await api.subirArchivo(tipo, archivo);
-      aviso(r.mensaje + ` (${r.registros} registros${r.errores ? `, ${r.errores} con error` : ''})`, r.valido ? 'ok' : 'error');
-      recargarArchivos();
-    } catch (e) {
-      aviso(e instanceof Error ? e.message : 'No se pudo subir el archivo', 'error');
+  /**
+   * Sube uno o varios archivos de un tipo. Ventas y bloqueos son mensuales: un periodo que cruza de mes (p. ej. el caso del
+   * 30 de septiembre) necesita 2 archivos. El mes sale del nombre (ventas.202609, bloqueo.2610); si el nombre no lo dice, se
+   * asigna por orden alfabetico: el primero al mes de inicio y el siguiente al mes que sigue.
+   */
+  const subirArchivos = async (tipo: string, archivos: File[]) => {
+    const ordenados = [...archivos].sort((a, b) => a.name.localeCompare(b.name));
+    const base = (form?.fechaInicio ?? '').slice(0, 7);
+    for (const [i, archivo] of ordenados.entries()) {
+      try {
+        const mensual = tipo === 'ventas' || tipo === 'bloqueos';
+        const r = await api.subirArchivo(tipo, archivo, mensual && base ? mesMasN(base, i) : undefined);
+        aviso(`${archivo.name}: ${r.mensaje} (${r.registros} registros${r.errores ? `, ${r.errores} con error` : ''})`, r.valido ? 'ok' : 'error');
+      } catch (e) {
+        aviso(`${archivo.name}: ${e instanceof Error ? e.message : 'No se pudo subir el archivo'}`, 'error');
+      }
     }
+    recargarArchivos();
   };
 
   const quitarArchivo = async (tipo: string) => {
@@ -197,8 +225,10 @@ export default function Pagina() {
   const algoritmoTexto = config?.algoritmos.find((a) => a.id === algoritmoId)?.etiqueta ?? '';
   const sinBackend = !estado && !!error;
 
+  const pantallaMapa = pestana === 'panorama';
   return (
-    <div>
+    <div className={'app' + (pantallaMapa ? ' app-mapa' : '')} style={{ ['--cab-h' as string]: `${altoCabecera}px` }}>
+      <div ref={cabecera} className="cabecera">
       <TopBar
         estado={estado}
         minutoAhora={minutoAhora}
@@ -214,7 +244,8 @@ export default function Pagina() {
           <button key={id} className={'tab' + (pestana === id ? ' active' : '')} onClick={() => irA(id)}>{etiqueta}</button>
         ))}
       </nav>
-      <main>
+      </div>
+      <main className={pantallaMapa ? 'main-mapa' : undefined}>
         {(sinBackend || (errorConfig && !config)) && (
           <div className="banner banner-error">
             <b>No se puede conectar con el backend de PaqRap.</b> {error ?? errorConfig}. Verifique que el servicio Spring Boot esté en
@@ -235,7 +266,7 @@ export default function Pagina() {
             ocupado={ocupado}
             puedeIniciar={!!archivos}
             onIniciar={iniciar}
-            onSubir={subirArchivo}
+            onSubir={subirArchivos}
             onQuitar={quitarArchivo}
             onUmbralesEnVivo={umbralesEnVivo}
           />

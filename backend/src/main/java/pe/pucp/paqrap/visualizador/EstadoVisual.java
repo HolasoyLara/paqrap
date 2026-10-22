@@ -49,7 +49,7 @@ public record EstadoVisual(
     }
 
     public record AlmacenVisual(String id, String nombre, double x, double y, boolean central, Integer capacidad,
-                                Integer stock) {
+                                Integer stock, List<String> arriban) {
     }
 
     public record VehiculoVisual(String id, String tipo, String estado, String estadoEtiqueta, double x, double y,

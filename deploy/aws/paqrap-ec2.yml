@@ -15,8 +15,13 @@ Parameters:
     AllowedPattern: "https://github\\.com/.+"
   CarpetaProyecto:
     Type: String
-    Default: Resultado
-    Description: Carpeta del repositorio que contiene backend/ y docker-compose.yml. Use "." si esa carpeta es la raiz.
+    Default: "."
+    Description: Carpeta del repositorio que contiene backend/ y docker-compose.yml. "." si es la raiz del repositorio.
+    AllowedPattern: "[A-Za-z0-9._/-]+"
+  Rama:
+    Type: String
+    Default: main
+    Description: Rama del repositorio que se despliega.
     AllowedPattern: "[A-Za-z0-9._/-]+"
   TipoInstancia:
     Type: String
@@ -123,6 +128,7 @@ Resources:
 
           REPO_URL="${RepoUrl}"
           CARPETA="${CarpetaProyecto}"
+          RAMA="${Rama}"
 
           # Memoria de respaldo: la compilacion de Maven y Next.js puede pasar de 2 GB.
           if [ ! -f /swapfile ]; then
@@ -143,7 +149,7 @@ Resources:
           chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
           cd /opt
-          git clone "$REPO_URL" paqrap
+          git clone --branch "$RAMA" --single-branch --depth 1 "$REPO_URL" paqrap
           cd "paqrap/$CARPETA"
 
           # La API y el visualizador comparten el puerto 8080 del contenedor; se publica en el 80.

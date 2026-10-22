@@ -93,6 +93,22 @@ public final class JornadaConductor {
         return horas;
     }
 
+    /** Inicios de las pausas de alimentacion de la unidad que ya empezaron entre desde y hasta (inclusive), en orden. */
+    public List<Double> pausasOcurridas(int correlativo, double desde, double hasta) {
+        List<Double> pausas = new ArrayList<>();
+        if (duracionAlimentacionH <= 0) return pausas;
+        double desfase = desfaseAlimentacion(correlativo);
+        double inicioDia = Math.floor(hasta / 24.0) * 24.0;
+        for (int d = -2; d <= 0; d++) {
+            for (int inicioTurno : inicioTurnos) {
+                double pausa = inicioDia + d * 24.0 + inicioTurno + desfase;
+                if (pausa >= desde && pausa <= hasta) pausas.add(pausa);
+            }
+        }
+        pausas.sort(Double::compare);
+        return pausas;
+    }
+
     public int[] getInicioTurnos() { return Arrays.copyOf(inicioTurnos, inicioTurnos.length); }
     public double getDuracionAlimentacionH() { return duracionAlimentacionH; }
 }

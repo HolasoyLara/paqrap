@@ -57,10 +57,11 @@ export const api = {
     pedir<ResumenArchivo[]>(
       `/api/datos/archivos?escenario=${encodeURIComponent(escenario)}&fechaInicio=${encodeURIComponent(fechaInicio)}&dias=${dias}`,
     ),
-  subirArchivo: (tipo: string, archivo: File) => {
+  subirArchivo: (tipo: string, archivo: File, mes?: string) => {
     const datos = new FormData();
     datos.append('archivo', archivo);
-    return pedir<{ valido: boolean; mensaje: string; registros: number; errores: number }>(`/api/datos/archivos/${tipo}`, {
+    const consulta = mes ? `?mes=${encodeURIComponent(mes)}` : '';
+    return pedir<{ valido: boolean; mensaje: string; registros: number; errores: number }>(`/api/datos/archivos/${tipo}${consulta}`, {
       method: 'POST',
       body: datos,
     });

@@ -13,7 +13,7 @@ todo alineado con la **Lista de Exigencias v02**.
 | Capa | Tecnología |
 |---|---|
 | Backend | Java 21 + Spring Boot 3.5. Contiene la API REST, el motor de simulación por eventos, el planificador (GA / ACO) y la persistencia JPA (H2 en archivo o PostgreSQL). |
-| Frontend | Next.js 15 + React 19. Es el visualizador del prototipo v04: mapa SVG animado, KPI, cierre, pedidos y experimentación. |
+| Frontend | Next.js 15 + React 19. Es el visualizador del prototipo v04: mapa SVG animado a pantalla completa con panel lateral de detalle, KPI, cierre y pedidos. La experimentación GA vs ACO queda disponible solo por la API. |
 | Entrega | El ejecutable único `dist/paqrap-app.jar` sirve la API y la web. Además se puede levantar con Docker / docker compose, publicar en Vercel (visualizador) + Render (API) para pruebas, o en AWS (ECS Fargate o EC2). |
 
 ---
@@ -65,19 +65,20 @@ En Linux y macOS los datos y las bitácoras quedan en `~/.local/share/paqrap`.
 ## 2. Pantallas (prototipo v04)
 
 1. **Parámetros (V-1)**
-   - Escenario, algoritmo (GA o ACO), semilla, fecha y hora de inicio, duración objetivo y tipos de entrega incluidos.
+   - Escenario, fecha y hora de inicio, duración objetivo y tipos de entrega incluidos. El algoritmo queda fijo en GA y la semilla en 20260902 (misma fecha + mismos archivos = misma corrida); ACO y otras semillas se eligen por la API.
    - Umbrales del semáforo (C10); flota, almacenes y turnos.
    - Parámetros avanzados: velocidades y costos, plazos, ventana de planificación, aceleración y umbrales del colapso, averías por día y parámetros de cada algoritmo.
-   - Archivos de entrada: se muestran los publicados por el curso, con cuántas líneas válidas y errores tiene cada uno. Se pueden subir archivos propios de ventas, bloqueos, averías o mantenimiento, que se validan línea por línea.
+   - Archivos de entrada: se muestran los publicados por el curso, con cuántas líneas válidas y errores tiene cada uno. Se pueden subir archivos propios de ventas, bloqueos, averías o mantenimiento, que se validan línea por línea. Ventas y bloqueos son mensuales: para un periodo que cruza de mes (caso del 30 de septiembre) se pueden subir 2 archivos a la vez, uno por mes.
 
-2. **Panorama (V-2)**, el mapa en vivo de la ciudad de 70 × 50 km. Muestra:
+2. **Panorama (V-2)**, el mapa en vivo de la ciudad de 70 × 50 km, a pantalla completa ("mapa libre"). Las métricas, la leyenda, los filtros y la búsqueda de pedido empiezan recogidos y se abren con la barra flotante de arriba a la izquierda. Muestra:
    - los vehículos animados, con un ícono por tipo y la distinción entre operativos y averiados;
    - las rutas planificadas y los almacenes con su semáforo de stock;
    - los pedidos con su semáforo de plazo (verde, ámbar o rojo) y las calles bloqueadas;
+   - bajo cada almacén, su stock en números y porcentaje con el color del semáforo; al pasar el mouse se ven también las unidades que están en él y las que arriban con su hora estimada;
    - el panel de KPI, filtros (solo críticos, por tipo de unidad, etc.), zoom con la rueda y desplazamiento arrastrando.
 
-   Al hacer clic:
-   - **en un vehículo** se ve su ruta, carga, pedidos e historial, y se puede registrar una avería de tipo 1, 2 o 3;
+   Al hacer clic se abre el detalle en un **panel lateral** que no tapa el mapa (se cierra con la × o Esc):
+   - **en un vehículo** se ve su carga, su ruta con una tarjeta por pedido (en orden de entrega), la pausa de alimentación solo si ya ocurrió, y su historial, y se puede registrar una avería de tipo 1, 2 o 3;
    - **en un pedido** se ve su estado, plazo, unidad y trazabilidad, y se puede editar o cancelar;
    - **en un almacén** se ven su stock y sus unidades;
    - **en un tramo de calle** se bloquea o se reabre ese tramo, y se replanifica;
@@ -93,9 +94,10 @@ En Linux y macOS los datos y las bitácoras quedan en `~/.local/share/paqrap`.
 
 4. **Pedidos**: registro manual (operación día a día), carga masiva, seguimiento por código, búsqueda por código o cliente, estado y tipo, edición o cancelación antes del despacho y exportación CSV.
 
-5. **Experimentación**: compara GA y ACO sobre **las mismas instancias** (B23, D20).
+5. **Experimentación (solo API)**: compara GA y ACO sobre **las mismas instancias** (B23, D20) con `POST /api/experimentos`.
    - Se ejecutan N fechas de inicio × 2 algoritmos, sin interfaz y a máxima velocidad.
-   - Muestra media ± desviación estándar, una **prueba t pareada**, barras comparativas, CSV e historial de experimentos (C25).
+   - Devuelve media ± desviación estándar, una **prueba t pareada**, CSV e historial de experimentos (C25).
+   - La pestaña del visualizador se quitó en la última entrega; el servicio sigue disponible.
 
 ---
 
@@ -167,7 +169,7 @@ Ambos implementan la interfaz `AlgoritmoMetaheuristico` (patrón Strategy). Se e
 
 ```
  Navegador (cualquier dispositivo)                                     
-   Visualizador Next.js: mapa SVG, KPI, cierre, pedidos, experimentación
+   Visualizador Next.js: mapa SVG, KPI, cierre, pedidos
         |  GET /api/simulacion/estado cada 1 s (estado compartido) + acciones REST
         v
  Spring Boot (puerto 8080), que también sirve la web estática del visualizador
@@ -252,7 +254,7 @@ Vercel solo ejecuta el visualizador Next.js; **la API Java se publica aparte** (
 - **Actualizar:** vuelva a ejecutar el script.
 - **Eliminar:** `aws cloudformation delete-stack --stack-name paqrap` y luego borre el repositorio ECR. El balanceador y Fargate generan costo mientras existan.
 
-**Opción C (recomendada para cuenta student): una sola instancia EC2, sin Docker ni roles IAM en su PC.**, con `DESPLEGAR-AWS-EC2.bat` (o `deploy/aws/desplegar-ec2.ps1`).
+**Opción C (recomendada para cuenta student): una sola instancia EC2, sin Docker ni roles IAM en su PC.**, con `DESPLEGAR-AWS-EC2.bat` (Windows), `deploy/aws/desplegar-ec2.ps1` o `bash deploy/aws/desplegar-ec2.sh` (Linux/macOS). **Solo necesita las credenciales de AWS CLI**: el script crea toda la infraestructura, toma el repositorio del `origin` local, espera a que la aplicación responda y muestra la URL. Parámetros opcionales: `-RepoUrl`, `-Rama` (por defecto `main`: **despliega lo que esté en esa rama de GitHub**, así que suba antes sus cambios), `-TipoInstancia`, `-Region`, `-Pila`.
 
 - **Requisitos:** AWS CLI v2 con credenciales vigentes (`aws configure`) y el proyecto subido a un repositorio **público** de GitHub.
 - **Qué hace:** crea la pila `paqrap-ec2` (`deploy/aws/paqrap-ec2.yml`): VPC pública mínima, un grupo de seguridad con el puerto 80 y una instancia EC2 `t3.small`. La instancia clona el repositorio, agrega 2 GB de swap, construye la imagen con Docker Compose y la publica en el puerto 80.
@@ -342,6 +344,7 @@ En Linux o macOS, desde la carpeta `backend`, use `./mvnw test`.
 | Prueba | Qué verifica |
 |---|---|
 | `MotorSimulacionTest` | Escenario 5D completo con los datos reales de setiembre de 2026, con el GA y con el ACO. Comprueba el fin del periodo, la cantidad de pedidos y que el cumplimiento sea mayor a 95 %. |
+| `ReglasCursoTest` | Reglas del documento de Preguntas y Respuestas: los 3 tipos de avería, la pausa de alimentación y el cambio de turno, el mantenimiento preventivo bimestral y los formatos de ventas y bloqueos. |
 | `ApiIntegracionTest` | Recorrido de punta a punta por la API: configuración, archivos, corrida día a día con un pedido manual, y cierre. |
 | `ReasignacionCargaTest` | Avería de tipo 2 con un pedido de 4 h que ya no puede reponerse desde el almacén: otra unidad en camino lo atiende primero (B10, B11). |
 | `ExploracionColapsoTest` | Exploración de fechas de colapso. No corre por defecto; se activa con `-Dpaqrap.explorar=true`. |
@@ -353,8 +356,8 @@ Verificación hecha sobre esta entrega (10-oct-2026, Windows 11):
   - arranca en unos 10 s, con el proceso Java oculto;
   - la web responde en `/`, la API en `/api/*`, y una corrida 5D avanza a ×160;
   - `DETENER.bat` la cierra, el puerto queda libre y la corrida detenida aparece en el historial después de reiniciar.
-- Visualizador probado en el navegador: parámetros, animación del mapa, *tooltip*, modales, avería registrada desde la interfaz, bloqueo manual, cierre, pedidos (incluido un registro manual en día a día) y un experimento con prueba t.
-- Pruebas automáticas del backend (`mvnw test`): 6 ejecutadas, 0 fallos, 1 omitida (la de exploración). Resultados de la simulación 5D del 1 al 5 de setiembre de 2026, con la semilla por defecto y sin reloj:
+- Visualizador probado en el navegador: parámetros, animación del mapa, *tooltip*, modales, avería registrada desde la interfaz, bloqueo manual, cierre y pedidos (incluido un registro manual en día a día). El experimento con prueba t se probó por la API.
+- Pruebas automáticas del backend (`mvnw test`): 17 ejecutadas, 0 fallos, 1 omitida (la de exploración). Resultados de la simulación 5D del 1 al 5 de setiembre de 2026, con la semilla por defecto y sin reloj:
 
   | Algoritmo | Pedidos | Entregados a tiempo | Entregados tarde | En curso al cierre | Cumplimiento | Costo | km | Cómputo del planificador |
   |---|---|---|---|---|---|---|---|---|
@@ -418,7 +421,7 @@ Verificación hecha sobre esta entrega (10-oct-2026, Windows 11):
 | B9 B10 B11 B12 | ✔ | Replanificación por bloqueo y por avería, reasignación de carga en tránsito y prioridad por plazo. |
 | B13 B14 B15 B16 | ✔ | Turnos, refrigerio, recarga a las 23:59:59 y tope de 1 000 unidades. |
 | B18 B19 B20 B22 | ✔ | Los tres escenarios; el 5D dura entre 30 y 60 minutos. |
-| B23 B24 | ✔ | Experimentación con prueba t y detección del colapso. |
+| B23 B24 | ✔ | Experimentación con prueba t (por API, sin pantalla) y detección del colapso. |
 | B25 | ✔ | Historial de rutas con la causa del cambio (`/api/corridas/{id}/rutas`). |
 
 **C. Visualización y monitoreo**
@@ -432,7 +435,7 @@ Verificación hecha sobre esta entrega (10-oct-2026, Windows 11):
 | C15 | ✘ | Pausar, adelantar o retroceder (deseable). |
 | C16 C17 C18 C19 C22 C23 | ✔ | KPI, zoom y desplazamiento, detalle de unidad y de pedido, alertas de reasignación y filtros. |
 | C24 | — | Video: entregable del equipo. |
-| C25 | ✔ | Historial comparativo de experimentos. |
+| C25 | ✔ | Historial comparativo de experimentos (por API, sin pantalla). |
 
 **D. Flota, turnos, simulación y reportes**
 
@@ -444,7 +447,7 @@ Verificación hecha sobre esta entrega (10-oct-2026, Windows 11):
 | D8 D9 | ✔ | Almacén central infinito y recarga diaria de los intermedios. |
 | D12 D13 D14 | ✔ | Los tres escenarios a partir de parámetros. |
 | D15 D16 D17 D18 D19 D21 D25 | ✔ | Cierre (V-3): cumplimiento, costo, km por tipo, utilización, incidencias, colapso y verificación de la política de entrega. |
-| D20 D23 | ✔ | Experimentación: varias instancias, semillas y parámetros. |
+| D20 D23 | ✔ | Experimentación (por API): varias instancias, semillas y parámetros. |
 | D22 D24 | ✔ | CSV del cierre, de los pedidos, de las corridas y de los experimentos; detalle de cada ejecución. |
 
 ---
