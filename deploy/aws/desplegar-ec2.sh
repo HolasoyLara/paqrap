@@ -6,7 +6,8 @@
 #
 # Uso: bash deploy/aws/desplegar-ec2.sh [region] [pila]
 #   Variables opcionales: REPO_URL (por defecto el "origin" local), RAMA (main), CARPETA (.),
-#   TIPO_INSTANCIA (t3.small), CIDR_SSH, SIN_ESPERA=1
+#   TIPO_INSTANCIA (t3.small), CIDR_SSH, SIN_ESPERA=1,
+#   DUCKDNS_SUBDOMINIO y DUCKDNS_TOKEN (URL fija http://<subdominio>.duckdns.org)
 set -euo pipefail
 
 REGION="${1:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
@@ -34,6 +35,13 @@ echo "Repositorio $REPO_URL (rama $RAMA)"
 
 PARAMETROS=("RepoUrl=$REPO_URL" "Rama=$RAMA" "CarpetaProyecto=$CARPETA" "TipoInstancia=$TIPO_INSTANCIA")
 if [ -n "$CIDR_SSH" ]; then PARAMETROS+=("CidrSsh=$CIDR_SSH"); fi
+DUCKDNS_SUBDOMINIO="$(echo "${DUCKDNS_SUBDOMINIO:-}" | tr 'A-Z' 'a-z' | sed 's/\.duckdns\.org$//')"
+if [ -n "$DUCKDNS_SUBDOMINIO" ] && [ -n "${DUCKDNS_TOKEN:-}" ]; then
+  PARAMETROS+=("DuckDnsSubdominio=$DUCKDNS_SUBDOMINIO" "DuckDnsToken=$DUCKDNS_TOKEN")
+  echo "URL fija: http://$DUCKDNS_SUBDOMINIO.duckdns.org"
+elif [ -n "$DUCKDNS_SUBDOMINIO" ] || [ -n "${DUCKDNS_TOKEN:-}" ]; then
+  echo "Para la URL fija defina DUCKDNS_SUBDOMINIO y DUCKDNS_TOKEN (los dos)."; exit 1
+fi
 
 echo "==> Creando/actualizando la pila $PILA (2-3 minutos; la app tarda 10-15 minutos mas en compilarse)"
 aws cloudformation deploy --region "$REGION" --stack-name "$PILA" \
@@ -55,4 +63,5 @@ if [ -z "${SIN_ESPERA:-}" ]; then
 fi
 echo "Salud: $URL/api/salud"
 echo "Para el visualizador en Vercel use BACKEND_URL=$URL"
+[ -n "$DUCKDNS_SUBDOMINIO" ] && [ -n "${DUCKDNS_TOKEN:-}" ] && echo "URL fija (puede tardar 1-2 minutos en resolver): http://$DUCKDNS_SUBDOMINIO.duckdns.org"
 echo "Para borrar todo: aws cloudformation delete-stack --region $REGION --stack-name $PILA"
