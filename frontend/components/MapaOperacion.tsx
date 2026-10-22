@@ -1,10 +1,13 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EstadoVisual, VehiculoVisual } from '@/lib/tipos';
-import { COLOR_SEMAFORO, semaforo } from '@/lib/formato';
+import type { AlmacenVisual, EstadoVisual, VehiculoVisual } from '@/lib/tipos';
+import {
+  BORDE_VACIO, COLOR_AVERIA, COLOR_BLOQUEO, COLOR_OCUPACION, COLOR_SEMAFORO, porcentaje, type Semaforo, semaforo, semaforoOcupacion,
+  type SemaforoOcupacion,
+} from '@/lib/formato';
 import { posicionEnTrayectoria } from '@/lib/useEstadoSimulacion';
-import { GlifoAlmacen, GlifoPaquete, GlifoVehiculo } from './Iconos';
+import { GlifoAlmacen, GlifoLlave, GlifoPaquete, GlifoVehiculo } from './Iconos';
 
 // Reticula oficial de la ciudad: 70 x 50 km, origen (0,0) en la esquina inferior izquierda (P4).
 export const ANCHO_KM = 70;
@@ -53,7 +56,12 @@ export interface Filtros {
   rutas: 'todas' | 'seleccionada' | 'ninguna';
   tipos: Record<string, boolean>;
   unidadesEnAlmacen: boolean;
+  /** F15-F16: colores de ocupacion visibles, compartidos entre las listas del panel y el mapa. */
+  semaforoUT: Record<SemaforoOcupacion, boolean>;
+  semaforoAlmacen: Record<SemaforoOcupacion, boolean>;
 }
+
+const TODOS_LOS_COLORES: Record<SemaforoOcupacion, boolean> = { vacio: true, verde: true, ambar: true, rojo: true };
 
 export const FILTROS_POR_DEFECTO: Filtros = {
   soloCriticos: false,
@@ -62,7 +70,28 @@ export const FILTROS_POR_DEFECTO: Filtros = {
   rutas: 'todas',
   tipos: { AUTO: true, MOTO: true, BICICLETA: true },
   unidadesEnAlmacen: false,
+  semaforoUT: { ...TODOS_LOS_COLORES },
+  semaforoAlmacen: { ...TODOS_LOS_COLORES },
 };
+
+/** La unidad pasa el filtro de tipo y de semaforo de ocupacion (las averiadas o en taller siempre se muestran). */
+export function vehiculoPasaFiltro(v: VehiculoVisual, f: Filtros, verde: number, ambar: number): boolean {
+  if (!f.tipos[v.tipo]) return false;
+  if (FUERA_DE_SERVICIO.has(v.estado)) return true;
+  return f.semaforoUT[ocupacionVehiculo(v, verde, ambar).sem];
+}
+
+/** El almacen pasa el filtro de semaforo de ocupacion (el central, sin semaforo, siempre se muestra). */
+export function almacenPasaFiltro(a: AlmacenVisual, f: Filtros, verde: number, ambar: number): boolean {
+  const o = ocupacionAlmacen(a, verde, ambar);
+  return o == null || f.semaforoAlmacen[o.sem];
+}
+
+/** Unidades que llevan alguna parte del pedido (todas, no solo la primera). */
+export function vehiculosDePedido(estado: EstadoVisual, idPedido: string): string[] {
+  const p = estado.pedidos.find((x) => x.id === idPedido);
+  return p?.vehiculos ? p.vehiculos.split(', ').filter(Boolean) : [];
+}
 
 interface Props {
   estado: EstadoVisual;
@@ -79,13 +108,56 @@ interface Props {
 
 const EN_BASE = new Set(['EN_ALMACEN', 'MANTENIMIENTO', 'EN_TALLER']);
 
-function colorVehiculo(v: VehiculoVisual, verde: number, ambar: number): string {
-  if (v.estado === 'AVERIADA' || v.estado === 'EN_TALLER') return GRIS;
-  if (v.holguraMinima == null) return NAVY;
-  return COLOR_SEMAFORO[semaforo(v.holguraMinima, verde, ambar)];
+export const FUERA_DE_SERVICIO = new Set(['AVERIADA', 'EN_TALLER']);
+
+/** Semaforo de ocupacion de la unidad (C27): 100 * carga / capacidad. */
+export function ocupacionVehiculo(v: VehiculoVisual, verde: number, ambar: number): { pct: number; sem: SemaforoOcupacion } {
+  const pct = porcentaje(v.carga, v.capacidad);
+  return { pct, sem: semaforoOcupacion(pct, verde, ambar) };
+}
+
+/** Ocupacion de un almacen intermedio (C21): 100 * stock / capacidad; el central no tiene semaforo. */
+export function ocupacionAlmacen(a: AlmacenVisual, verde: number, ambar: number): { pct: number; sem: SemaforoOcupacion } | null {
+  if (a.central || a.capacidad == null) return null;
+  const pct = porcentaje(a.stock ?? 0, a.capacidad);
+  return { pct, sem: semaforoOcupacion(pct, verde, ambar) };
+}
+
+/** Relleno, borde y color del glifo de la insignia de la unidad. La averia/taller es gris; el resto, por ocupacion. */
+function estiloVehiculo(v: VehiculoVisual, verde: number, ambar: number) {
+  if (FUERA_DE_SERVICIO.has(v.estado)) return { fill: GRIS, borde: '#fff', glifo: '#fff' };
+  const { sem } = ocupacionVehiculo(v, verde, ambar);
+  if (sem === 'vacio') return { fill: COLOR_OCUPACION.vacio, borde: BORDE_VACIO, glifo: BORDE_VACIO };
+  return { fill: COLOR_OCUPACION[sem], borde: '#fff', glifo: '#fff' };
+}
+
+/** Urgencia de plazo de la unidad (pedido mas urgente a bordo): solo se marca en riesgo o critico. */
+export function urgenciaVehiculo(v: VehiculoVisual, verde: number, ambar: number): Semaforo | null {
+  if (v.holguraMinima == null) return null;
+  return semaforo(v.holguraMinima, verde, ambar);
 }
 
 const sy = (y: number) => ALTO_KM - y;
+
+/** D10-D13: insignia con el numero y el color del tipo de averia, en la esquina superior derecha del icono. */
+export function InsigniaAveria({ tipo, x = 10, y = -10 }: { tipo: number; x?: number; y?: number }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <circle r={7} fill={COLOR_AVERIA[tipo] ?? GRIS} stroke="#fff" strokeWidth={1.5} />
+      <text y={3.4} textAnchor="middle" fontSize={9.5} fontWeight={800} fill={tipo === 1 ? '#1c2b36' : '#fff'}>{tipo}</text>
+    </g>
+  );
+}
+
+/** Unidad en taller: insignia blanca con una llave. */
+export function InsigniaTaller({ x = 10, y = -10 }: { x?: number; y?: number }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <circle r={7} fill="#fff" stroke={NAVY} strokeWidth={1.5} />
+      <GlifoLlave color={NAVY} />
+    </g>
+  );
+}
 
 /** Reticula de calles (1 km) con ejes cada 10 km; solo se vuelve a dibujar al cambiar el zoom. */
 const Reticula = memo(function Reticula({ escala }: { escala: number }) {
@@ -160,11 +232,11 @@ export default function MapaOperacion(props: Props) {
   const vehiculosVisibles = useMemo(
     () =>
       estado.vehiculos.filter((v) => {
-        if (!filtros.tipos[v.tipo]) return false;
+        if (!vehiculoPasaFiltro(v, filtros, estado.umbralVerde, estado.umbralAmbar)) return false;
         if (EN_BASE.has(v.estado) && v.tray.length === 0) return filtros.unidadesEnAlmacen;
         return true;
       }),
-    [estado.vehiculos, filtros],
+    [estado.vehiculos, filtros, estado.umbralVerde, estado.umbralAmbar],
   );
 
   const posicionBase = useMemo(() => {
@@ -189,6 +261,19 @@ export default function MapaOperacion(props: Props) {
     return m;
   }, [vehiculosVisibles]);
 
+  /** C30: orientacion del glifo segun el tramo actual (calles ortogonales): espejo hacia la izquierda, ±90° en vertical. */
+  const orientacionGlifo = (v: VehiculoVisual, m: number): string => {
+    const n = v.tray.length / 3;
+    if (n < 2) return '';
+    let i = 0;
+    while (i < n - 2 && v.tray[3 * (i + 1) + 2] < m) i++;
+    const dx = v.tray[3 * (i + 1)] - v.tray[3 * i];
+    const dy = v.tray[3 * (i + 1) + 1] - v.tray[3 * i + 1];
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return '';
+    if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? 'scale(-1,1)' : '';
+    return dy > 0 ? 'rotate(-90)' : 'rotate(90)'; // y del mapa crece hacia el norte; en el SVG, hacia abajo
+  };
+
   const transformVehiculo = useCallback(
     (v: VehiculoVisual, m: number, s: number) => {
       const p = v.tray.length ? posicionEnTrayectoria(v.tray, m) ?? [v.x, v.y] : [v.x, v.y];
@@ -207,7 +292,11 @@ export default function MapaOperacion(props: Props) {
       const s = escalaRef.current;
       for (const v of vehiculosVisibles) {
         const g = vehiculosRef.current.get(v.id);
-        if (g) g.setAttribute('transform', transformVehiculo(v, m, s));
+        if (!g) continue;
+        g.setAttribute('transform', transformVehiculo(v, m, s));
+        const glifo = g.querySelector('[data-glifo]');
+        const o = orientacionGlifo(v, m);
+        if (glifo && glifo.getAttribute('transform') !== o) glifo.setAttribute('transform', o);
       }
       raf = requestAnimationFrame(paso);
     };
@@ -251,7 +340,29 @@ export default function MapaOperacion(props: Props) {
 
   const ocultarLinea = () => lineaHoverRef.current?.setAttribute('visibility', 'hidden');
 
+  // C05: zoom con pellizco (dos punteros) en pantallas tactiles
+  const punteros = useRef(new Map<number, { x: number; y: number }>());
+  const pellizco = useRef<{ dist0: number; vista0: Vista } | null>(null);
+  const distanciaPunteros = () => {
+    const [a, b] = [...punteros.current.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+  const soltarPuntero = (e: React.PointerEvent) => {
+    punteros.current.delete(e.pointerId);
+    if (punteros.current.size < 2) pellizco.current = null;
+  };
+
   const alMover = (e: React.PointerEvent) => {
+    if (punteros.current.has(e.pointerId)) punteros.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pz = pellizco.current;
+    if (pz) {
+      const d = distanciaPunteros();
+      if (d > 0) {
+        const ancho = Math.max(VB_W / 14, Math.min(VB_W, (pz.vista0.ancho * pz.dist0) / d));
+        onVista(limitar({ ...pz.vista0, ancho }));
+      }
+      return;
+    }
     const a = arrastre.current;
     if (a) {
       const dx = e.clientX - a.x;
@@ -294,10 +405,24 @@ export default function MapaOperacion(props: Props) {
 
   const alPresionar = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    punteros.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (punteros.current.size === 2) {
+      // segundo dedo: empieza el pellizco y se cancela el arrastre
+      pellizco.current = { dist0: distanciaPunteros(), vista0: vista };
+      arrastre.current = null;
+      setArrastrando(false);
+      return;
+    }
     arrastre.current = { x: e.clientX, y: e.clientY, vista, movido: false };
   };
 
   const alSoltar = (e: React.PointerEvent) => {
+    const enPellizco = pellizco.current != null || punteros.current.size > 1;
+    soltarPuntero(e);
+    if (enPellizco) {
+      arrastre.current = null;
+      return;
+    }
     const a = arrastre.current;
     arrastre.current = null;
     setArrastrando(false);
@@ -325,10 +450,25 @@ export default function MapaOperacion(props: Props) {
   const onVistaRef = useRef(onVista);
   onVistaRef.current = onVista;
 
-  // zoom con la rueda, centrado en el cursor
+  // C08: zoom con la rueda, centrado en el cursor, continuo (proporcional a deltaY) y animado ~150 ms
+  const animZoom = useRef<{ desde: Vista; hasta: Vista; t0: number; raf: number } | null>(null);
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
+    const DURACION = 150;
+    const paso = () => {
+      const a = animZoom.current;
+      if (!a) return;
+      const k = Math.min(1, (performance.now() - a.t0) / DURACION);
+      const f = 1 - Math.pow(1 - k, 3);
+      onVistaRef.current({
+        cx: a.desde.cx + (a.hasta.cx - a.desde.cx) * f,
+        cy: a.desde.cy + (a.hasta.cy - a.desde.cy) * f,
+        ancho: a.desde.ancho + (a.hasta.ancho - a.desde.ancho) * f,
+      });
+      if (k < 1) a.raf = requestAnimationFrame(paso);
+      else animZoom.current = null;
+    };
     const alRodar = (e: WheelEvent) => {
       e.preventDefault();
       const ctm = svg.getScreenCTM();
@@ -337,33 +477,39 @@ export default function MapaOperacion(props: Props) {
       pt.x = e.clientX;
       pt.y = e.clientY;
       const p = pt.matrixTransform(ctm.inverse());
-      const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-      const v = vistaRef.current;
-      const nuevoAncho = Math.max(VB_W / 14, Math.min(VB_W, v.ancho * factor));
-      const r = nuevoAncho / v.ancho;
-      onVistaRef.current(limitar({ cx: p.x - (p.x - v.cx) * r, cy: p.y - (p.y - v.cy) * r, ancho: nuevoAncho }));
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; // lineas -> pixeles
+      const factor = Math.exp(Math.max(-300, Math.min(300, delta)) * 0.0015);
+      // los pasos seguidos se acumulan sobre el destino de la animacion en curso
+      const base = animZoom.current?.hasta ?? vistaRef.current;
+      const nuevoAncho = Math.max(VB_W / 14, Math.min(VB_W, base.ancho * factor));
+      const r = nuevoAncho / base.ancho;
+      const hasta = limitar({ cx: p.x - (p.x - base.cx) * r, cy: p.y - (p.y - base.cy) * r, ancho: nuevoAncho });
+      if (animZoom.current) cancelAnimationFrame(animZoom.current.raf);
+      animZoom.current = { desde: vistaRef.current, hasta, t0: performance.now(), raf: 0 };
+      animZoom.current.raf = requestAnimationFrame(paso);
     };
     svg.addEventListener('wheel', alRodar, { passive: false });
-    return () => svg.removeEventListener('wheel', alRodar);
+    return () => {
+      svg.removeEventListener('wheel', alRodar);
+      if (animZoom.current) cancelAnimationFrame(animZoom.current.raf);
+    };
   }, []);
 
   // ---------------- capas ----------------
-  const idSel = seleccion?.tipo === 'vehiculo' ? seleccion.id : null;
-  const vehiculoDePedido = useMemo(() => {
-    if (seleccion?.tipo !== 'pedido') return null;
-    const p = estado.pedidos.find((x) => x.id === seleccion.id);
-    return p?.vehiculos ? p.vehiculos.split(', ')[0] : null;
-  }, [seleccion, estado.pedidos]);
-  const vehiculoResaltado = idSel ?? vehiculoDePedido;
+  // F01/F03: al seleccionar un pedido se resaltan las rutas de TODAS las unidades que lo llevan
+  const claveResaltados = seleccion?.tipo === 'vehiculo' ? seleccion.id
+    : seleccion?.tipo === 'pedido' ? vehiculosDePedido(estado, seleccion.id).join(',') : '';
+  const resaltados = useMemo(() => new Set(claveResaltados ? claveResaltados.split(',') : []), [claveResaltados]);
+  const hayResaltado = resaltados.size > 0;
 
   const rutas = useMemo(() => {
     if (filtros.rutas === 'ninguna') return [];
     return vehiculosVisibles
       .filter((v) => v.tray.length >= 6)
-      .filter((v) => filtros.rutas === 'todas' || v.id === vehiculoResaltado)
-      .map((v) => ({ id: v.id, sel: v.id === vehiculoResaltado }))
+      .filter((v) => filtros.rutas === 'todas' || resaltados.has(v.id))
+      .map((v) => ({ id: v.id, sel: resaltados.has(v.id) }))
       .sort((a, b) => Number(a.sel) - Number(b.sel));
-  }, [vehiculosVisibles, filtros.rutas, vehiculoResaltado]);
+  }, [vehiculosVisibles, filtros.rutas, resaltados]);
 
   const conteoEnAlmacen = useMemo(() => {
     const m = new Map<string, number>();
@@ -383,7 +529,9 @@ export default function MapaOperacion(props: Props) {
       onPointerMove={alMover}
       onPointerDown={alPresionar}
       onPointerUp={alSoltar}
-      onPointerLeave={() => {
+      onPointerCancel={soltarPuntero}
+      onPointerLeave={(e) => {
+        soltarPuntero(e);
         arrastre.current = null;
         setArrastrando(false);
         props.onHover(null, 0, 0);
@@ -401,7 +549,7 @@ export default function MapaOperacion(props: Props) {
             const pts: string[] = [];
             for (let i = 0; i < b.puntos.length; i += 2) pts.push(`${b.puntos[i]},${sy(b.puntos[i + 1])}`);
             return (
-              <polyline key={b.id} points={pts.join(' ')} fill="none" stroke="#c0392b" strokeWidth={5}
+              <polyline key={b.id} points={pts.join(' ')} fill="none" stroke={COLOR_BLOQUEO} strokeWidth={5}
                 strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={0.9}>
                 <title>{`Calle bloqueada (${b.id}) — dato real del curso`}</title>
               </polyline>
@@ -426,7 +574,7 @@ export default function MapaOperacion(props: Props) {
             }
             if (i + 3 >= v.tray.length) resto = v.tray.slice(i);
           }
-          const opacidad = vehiculoResaltado ? (r.sel ? 0.95 : 0.15) : 0.45;
+          const opacidad = hayResaltado ? (r.sel ? 0.95 : 0.15) : 0.45;
           return (
             <polyline key={`ruta-${r.id}`} points={puntosTray(resto, desde)} fill="none" stroke={NAVY}
               strokeWidth={r.sel ? 3.2 : 2} strokeDasharray="7 5" strokeLinecap="round" strokeLinejoin="round"
@@ -437,21 +585,22 @@ export default function MapaOperacion(props: Props) {
         <line ref={lineaHoverRef} x1={0} y1={0} x2={0} y2={0} stroke={NAVY} strokeOpacity={0.35} strokeWidth={8}
           strokeLinecap="round" vectorEffect="non-scaling-stroke" visibility="hidden" pointerEvents="none" />
 
-        {estado.almacenes.map((a) => {
-          const pct = a.capacidad ? (100 * (a.stock ?? 0)) / a.capacidad : null;
-          const color = pct == null ? NAVY : COLOR_SEMAFORO[semaforo(pct, verde, ambar)];
+        {estado.almacenes.filter((a) => almacenPasaFiltro(a, filtros, verde, ambar)).map((a) => {
+          const ocup = ocupacionAlmacen(a, verde, ambar);
+          const vacio = ocup?.sem === 'vacio';
+          const color = ocup == null ? NAVY : COLOR_OCUPACION[ocup.sem];
           const sel = seleccion?.tipo === 'almacen' && seleccion.id === a.id;
           const n = conteoEnAlmacen.get(a.id) ?? 0;
           return (
             <g key={a.id} className="map-select-hit" data-tipo="almacen" data-id={a.id}
               transform={`translate(${a.x},${sy(a.y)}) scale(${escala})`}>
-              <rect x={-13} y={-13} width={26} height={26} rx={6} fill={color} stroke={sel ? NAVY : '#fff'} strokeWidth={sel ? 3 : 1.5} />
-              <GlifoAlmacen />
+              <rect x={-13} y={-13} width={26} height={26} rx={6} fill={color} stroke={sel ? NAVY : vacio ? BORDE_VACIO : '#fff'} strokeWidth={sel ? 3 : vacio ? 2 : 1.5} />
+              <GlifoAlmacen color={vacio ? BORDE_VACIO : '#fff'} />
               <text y={27} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0a2c43" stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
                 {a.nombre}
               </text>
-              <text y={39} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={color} stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
-                {a.capacidad == null ? 'Stock: sin límite' : `Stock ${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(pct ?? 0)} %)`}
+              <text y={39} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={vacio ? BORDE_VACIO : color} stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
+                {a.capacidad == null ? 'Stock: sin límite' : `Stock ${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(ocup?.pct ?? 0)} %)`}
               </text>
               {n > 0 && (
                 <g transform="translate(14,-14)">
@@ -481,9 +630,10 @@ export default function MapaOperacion(props: Props) {
           })}
 
         {vehiculosVisibles.map((v) => {
-          const sel = vehiculoResaltado === v.id;
-          const color = colorVehiculo(v, verde, ambar);
-          const atenuado = v.estado === 'ALIMENTACION' || v.estado === 'MANTENIMIENTO' || (vehiculoResaltado && !sel);
+          const sel = resaltados.has(v.id);
+          const est = estiloVehiculo(v, verde, ambar);
+          const urgencia = FUERA_DE_SERVICIO.has(v.estado) ? null : urgenciaVehiculo(v, verde, ambar);
+          const atenuado = v.estado === 'ALIMENTACION' || v.estado === 'MANTENIMIENTO' || (hayResaltado && !sel);
           return (
             <g key={v.id} ref={(el) => {
               if (el) vehiculosRef.current.set(v.id, el);
@@ -491,8 +641,15 @@ export default function MapaOperacion(props: Props) {
             }}
               className="map-select-hit" data-tipo="vehiculo" data-id={v.id} transform={transformVehiculo(v, minuto, escala)}
               opacity={atenuado ? 0.6 : 1}>
-              <circle r={12} fill={color} stroke={sel ? '#0a2c43' : '#fff'} strokeWidth={sel ? 3 : 1.5} />
-              <GlifoVehiculo tipo={v.tipo} />
+              <circle r={12} fill={est.fill} stroke={sel ? '#0a2c43' : est.borde} strokeWidth={sel ? 3 : est.borde === '#fff' ? 1.5 : 2} />
+              <g data-glifo="" transform={orientacionGlifo(v, minuto)}>
+                <GlifoVehiculo tipo={v.tipo} color={est.glifo} />
+              </g>
+              {urgencia && urgencia !== 'verde' && (
+                <circle cx={-9} cy={-9} r={4.2} fill={COLOR_SEMAFORO[urgencia]} stroke="#fff" strokeWidth={1.4} />
+              )}
+              {v.estado === 'AVERIADA' && v.tipoAveria != null && <InsigniaAveria tipo={v.tipoAveria} />}
+              {v.estado === 'EN_TALLER' && <InsigniaTaller />}
             </g>
           );
         })}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, enlaces } from '@/lib/api';
 import type { CierreCorrida, CorridaHistorial, EstadoVisual } from '@/lib/tipos';
-import { duracion, numero, soles } from '@/lib/formato';
+import { duracion, etiquetaCodigo, numero, soles } from '@/lib/formato';
 
 interface Props {
   estado: EstadoVisual | null;
@@ -141,12 +141,12 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
             <Kpi etiqueta="Cumplimiento total" valor={`${numero(r.cumplimiento, 2)} %`} sub={`${numero(r.pedidosRegistrados)} pedidos · ${numero(r.entregadosATiempo)} entregados a tiempo`} />
             <Kpi etiqueta="Costo total" valor={soles(r.costoTotal)} sub={`${soles(r.costoPorPedidoEntregado, 2)} por pedido entregado`} />
             <Kpi etiqueta="Km recorridos" valor={`${numero(r.kmTotal)} km`} sub={`${numero(r.rutasDespachadas)} rutas despachadas`} />
-            <Kpi etiqueta="Re-ruteos totales" valor={String(r.reRuteosBloqueo + r.reRuteosAveria)} sub={`${r.reasignaciones} reasignaciones de carga · ${r.reprogramaciones} reprogramaciones`} />
+            <Kpi etiqueta="Rutas recalculadas" valor={String(r.reRuteosBloqueo + r.reRuteosAveria)} sub={`${r.reasignaciones} reasignaciones de carga · ${r.reprogramaciones} reprogramaciones`} />
             <Kpi etiqueta="Tiempo real de ejecución" valor={duracion(cierre.duracionRealSeg)} sub={`cómputo del planificador: ${numero(r.tiempoComputoPlanificadorMs / 1000, 1)} s en ${r.planificaciones} ventanas`} />
             <Kpi etiqueta="Semilla utilizada" valor={String(cierre.semilla)} sub={`algoritmo: ${ALGORITMO[cierre.algoritmo]}`} />
           </div>
           <div className="rerouting-breakdown">
-            <span>Desglose de re-ruteos — por calle bloqueada: <b>{r.reRuteosBloqueo}</b></span>
+            <span>Desglose de rutas recalculadas — por calle bloqueada: <b>{r.reRuteosBloqueo}</b></span>
             <span>por avería: <b>{r.reRuteosAveria}</b></span>
             <span>entregados fuera de plazo: <b>{r.entregadosTarde}</b></span>
             <span>en curso al cierre: <b>{r.enCurso}</b></span>
@@ -228,7 +228,7 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
                 </table>
               ) : <p className="empty-hint">Sin averías en la corrida.</p>}
               <p className="hint" style={{ marginTop: 8 }}>
-                Eventos: {Object.entries(cierre.incidencias.eventosPorTipo).map(([k, v]) => `${k.toLowerCase().replace('_', ' ')} ${v}`).join(' · ') || 'ninguno'}
+                Eventos: {Object.entries(cierre.incidencias.eventosPorTipo).map(([k, v]) => `${etiquetaCodigo(k)}: ${v}`).join(' · ') || 'ninguno'}
               </p>
             </div>
             <div className="card">
@@ -245,6 +245,45 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
               </table>
             </div>
           </div>
+
+          <h3 style={{ marginTop: 22 }}>
+            Última planificación estable {cierre.ultimaPlanificacion ? `(${cierre.ultimaPlanificacion.fecha} simulada)` : ''}
+          </h3>
+          {!cierre.ultimaPlanificacion ? (
+            <p className="empty-hint">Esta corrida se guardó antes de que el cierre incluyera la última planificación.</p>
+          ) : cierre.ultimaPlanificacion.rutas.length === 0 ? (
+            <p className="empty-hint">Al cierre no quedaban rutas vigentes: todas las unidades estaban en su almacén.</p>
+          ) : (
+            <>
+              <p className="hint">
+                Origen: {cierre.ultimaPlanificacion.causa} · {cierre.ultimaPlanificacion.rutas.length} unidades con ruta vigente al cierre
+                {' '}(pedidos pendientes de entregar en cada ruta, en orden de visita).
+              </p>
+              <div className="tabla-scroll" style={{ maxHeight: 360 }}>
+                <table className="daily-table">
+                  <thead>
+                    <tr><th>Unidad</th><th>Ruta</th><th>Sale de</th><th>Paradas (pedido · paquetes · llegada)</th><th>Regresa a</th></tr>
+                  </thead>
+                  <tbody>
+                    {cierre.ultimaPlanificacion.rutas.map((r) => (
+                      <tr key={r.vehiculo}>
+                        <td><b>{r.vehiculo}</b><div className="hint">{r.tipo}</div></td>
+                        <td>{r.ruta}</td>
+                        <td>{r.almacenSalida}<div className="hint">{r.salida}</div></td>
+                        <td>
+                          {r.paradas.length === 0 ? <span className="hint">Sin paradas pendientes (retorno o reubicación)</span>
+                            : r.paradas.map((p, i) => (
+                              <div key={p.pedido + i}>{i + 1}. {p.pedido} · {p.cantidad} paq. · {p.llegada}</div>
+                            ))}
+                        </td>
+                        <td>{r.almacenRetorno}<div className="hint">{r.regreso}</div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
 
           <h3 style={{ marginTop: 22 }}>Utilización de la flota (D18)</h3>
           <div className="tabla-scroll" style={{ maxHeight: 320 }}>

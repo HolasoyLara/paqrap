@@ -73,6 +73,12 @@ export default function Pagina() {
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [cierre, setCierre] = useState<CierreCorrida | null>(null);
   const [avisos, setAvisos] = useState<AvisoLocal[]>([]);
+  // F01/F03: «Ver ruta en el mapa» desde el detalle (aunque se venga de otra pestaña)
+  const [foco, setFoco] = useState<{ x: number; y: number; n: number } | null>(null);
+  const verEnMapa = useCallback((x: number, y: number) => {
+    setPestana('panorama');
+    setFoco((f) => ({ x, y, n: (f?.n ?? 0) + 1 }));
+  }, []);
   const cabecera = useRef<HTMLDivElement>(null);
   const [altoCabecera, setAltoCabecera] = useState(110);
   const primerEstado = useRef(true);
@@ -87,9 +93,10 @@ export default function Pagina() {
     return () => ro.disconnect();
   }, []);
 
-  // cada pestana empieza arriba
+  // cada pestana empieza arriba; un enfoque pendiente solo vale mientras se esta en Panorama
   useEffect(() => {
     window.scrollTo({ top: 0 });
+    if (pestana !== 'panorama') setFoco(null);
   }, [pestana]);
   const irA = (p: Pestana) => setPestana(p);
 
@@ -248,12 +255,10 @@ export default function Pagina() {
       <main className={pantallaMapa ? 'main-mapa' : undefined}>
         {(sinBackend || (errorConfig && !config)) && (
           <div className="banner banner-error">
-            <b>No se puede conectar con el backend de PaqRap.</b> {error ?? errorConfig}. Verifique que el servicio Spring Boot esté en
-            marcha (scripts <code>INICIAR</code>) o, si este visualizador está publicado en Vercel, que la variable <code>BACKEND_URL</code>
-            apunte a la URL pública del backend. Se reintenta automáticamente.
+            <b>No hay conexión con el servidor de PaqRap.</b> Intente nuevamente en unos segundos.
           </div>
         )}
-        {estado && error && <div className="banner banner-error">Conexión inestable con el backend: {error}. Reintentando…</div>}
+        {estado && error && <div className="banner banner-error">Conexión inestable con el servidor de PaqRap. Reintentando…</div>}
 
         {pestana === 'parametros' && config && form && (
           <PantallaParametros
@@ -281,6 +286,7 @@ export default function Pagina() {
             onAbrir={setSeleccion}
             onAviso={aviso}
             refrescar={refrescar}
+            foco={foco}
           />
         )}
         {pestana === 'cierre' && <PantallaCierre estado={estado} cierreRecibido={cierre} />}
@@ -298,6 +304,7 @@ export default function Pagina() {
           ambar={estado.umbralAmbar}
           onCerrar={() => setSeleccion(null)}
           onAbrir={setSeleccion}
+          onVerEnMapa={verEnMapa}
           onAviso={aviso}
         />
       )}

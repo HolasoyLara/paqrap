@@ -96,6 +96,20 @@ final class ReportesCsv {
             sb.append("Cumplimiento en ese momento (%);").append(num(c.colapso().cumplimiento())).append('\n');
             sb.append("Dias simulados hasta el colapso;").append(num(c.colapso().diasSimulados())).append('\n');
         }
+        CierreCorrida.UltimaPlanificacion up = c.ultimaPlanificacion();
+        if (up != null) {
+            sb.append('\n').append("Ultima planificacion estable;").append(up.fecha()).append(';').append(up.causa()).append('\n');
+            sb.append("Unidad;Tipo;Ruta;Almacen de salida;Salida;Paradas (pedido x paquetes @ llegada);Almacen de retorno;Regreso\n");
+            for (CierreCorrida.RutaVigente rv : up.rutas()) {
+                StringBuilder paradas = new StringBuilder();
+                for (CierreCorrida.ParadaPlan p : rv.paradas()) {
+                    if (paradas.length() > 0) paradas.append(" | ");
+                    paradas.append(p.pedido()).append(" x").append(p.cantidad()).append(" @ ").append(p.llegada());
+                }
+                sb.append(rv.vehiculo()).append(';').append(rv.tipo()).append(';').append(rv.ruta()).append(';').append(rv.almacenSalida()).append(';')
+                        .append(rv.salida()).append(';').append(paradas).append(';').append(rv.almacenRetorno()).append(';').append(rv.regreso()).append('\n');
+            }
+        }
         return sb.toString();
     }
 
