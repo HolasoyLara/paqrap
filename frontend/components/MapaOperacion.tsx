@@ -261,6 +261,19 @@ export default function MapaOperacion(props: Props) {
     return m;
   }, [vehiculosVisibles]);
 
+  /** C30: orientacion del glifo segun el tramo actual (calles ortogonales): espejo hacia la izquierda, ±90° en vertical. */
+  const orientacionGlifo = (v: VehiculoVisual, m: number): string => {
+    const n = v.tray.length / 3;
+    if (n < 2) return '';
+    let i = 0;
+    while (i < n - 2 && v.tray[3 * (i + 1) + 2] < m) i++;
+    const dx = v.tray[3 * (i + 1)] - v.tray[3 * i];
+    const dy = v.tray[3 * (i + 1) + 1] - v.tray[3 * i + 1];
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return '';
+    if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? 'scale(-1,1)' : '';
+    return dy > 0 ? 'rotate(-90)' : 'rotate(90)'; // y del mapa crece hacia el norte; en el SVG, hacia abajo
+  };
+
   const transformVehiculo = useCallback(
     (v: VehiculoVisual, m: number, s: number) => {
       const p = v.tray.length ? posicionEnTrayectoria(v.tray, m) ?? [v.x, v.y] : [v.x, v.y];
@@ -279,7 +292,11 @@ export default function MapaOperacion(props: Props) {
       const s = escalaRef.current;
       for (const v of vehiculosVisibles) {
         const g = vehiculosRef.current.get(v.id);
-        if (g) g.setAttribute('transform', transformVehiculo(v, m, s));
+        if (!g) continue;
+        g.setAttribute('transform', transformVehiculo(v, m, s));
+        const glifo = g.querySelector('[data-glifo]');
+        const o = orientacionGlifo(v, m);
+        if (glifo && glifo.getAttribute('transform') !== o) glifo.setAttribute('transform', o);
       }
       raf = requestAnimationFrame(paso);
     };
@@ -323,7 +340,29 @@ export default function MapaOperacion(props: Props) {
 
   const ocultarLinea = () => lineaHoverRef.current?.setAttribute('visibility', 'hidden');
 
+  // C05: zoom con pellizco (dos punteros) en pantallas tactiles
+  const punteros = useRef(new Map<number, { x: number; y: number }>());
+  const pellizco = useRef<{ dist0: number; vista0: Vista } | null>(null);
+  const distanciaPunteros = () => {
+    const [a, b] = [...punteros.current.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+  const soltarPuntero = (e: React.PointerEvent) => {
+    punteros.current.delete(e.pointerId);
+    if (punteros.current.size < 2) pellizco.current = null;
+  };
+
   const alMover = (e: React.PointerEvent) => {
+    if (punteros.current.has(e.pointerId)) punteros.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pz = pellizco.current;
+    if (pz) {
+      const d = distanciaPunteros();
+      if (d > 0) {
+        const ancho = Math.max(VB_W / 14, Math.min(VB_W, (pz.vista0.ancho * pz.dist0) / d));
+        onVista(limitar({ ...pz.vista0, ancho }));
+      }
+      return;
+    }
     const a = arrastre.current;
     if (a) {
       const dx = e.clientX - a.x;
@@ -366,10 +405,24 @@ export default function MapaOperacion(props: Props) {
 
   const alPresionar = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    punteros.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (punteros.current.size === 2) {
+      // segundo dedo: empieza el pellizco y se cancela el arrastre
+      pellizco.current = { dist0: distanciaPunteros(), vista0: vista };
+      arrastre.current = null;
+      setArrastrando(false);
+      return;
+    }
     arrastre.current = { x: e.clientX, y: e.clientY, vista, movido: false };
   };
 
   const alSoltar = (e: React.PointerEvent) => {
+    const enPellizco = pellizco.current != null || punteros.current.size > 1;
+    soltarPuntero(e);
+    if (enPellizco) {
+      arrastre.current = null;
+      return;
+    }
     const a = arrastre.current;
     arrastre.current = null;
     setArrastrando(false);
@@ -397,10 +450,25 @@ export default function MapaOperacion(props: Props) {
   const onVistaRef = useRef(onVista);
   onVistaRef.current = onVista;
 
-  // zoom con la rueda, centrado en el cursor
+  // C08: zoom con la rueda, centrado en el cursor, continuo (proporcional a deltaY) y animado ~150 ms
+  const animZoom = useRef<{ desde: Vista; hasta: Vista; t0: number; raf: number } | null>(null);
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
+    const DURACION = 150;
+    const paso = () => {
+      const a = animZoom.current;
+      if (!a) return;
+      const k = Math.min(1, (performance.now() - a.t0) / DURACION);
+      const f = 1 - Math.pow(1 - k, 3);
+      onVistaRef.current({
+        cx: a.desde.cx + (a.hasta.cx - a.desde.cx) * f,
+        cy: a.desde.cy + (a.hasta.cy - a.desde.cy) * f,
+        ancho: a.desde.ancho + (a.hasta.ancho - a.desde.ancho) * f,
+      });
+      if (k < 1) a.raf = requestAnimationFrame(paso);
+      else animZoom.current = null;
+    };
     const alRodar = (e: WheelEvent) => {
       e.preventDefault();
       const ctm = svg.getScreenCTM();
@@ -409,14 +477,22 @@ export default function MapaOperacion(props: Props) {
       pt.x = e.clientX;
       pt.y = e.clientY;
       const p = pt.matrixTransform(ctm.inverse());
-      const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-      const v = vistaRef.current;
-      const nuevoAncho = Math.max(VB_W / 14, Math.min(VB_W, v.ancho * factor));
-      const r = nuevoAncho / v.ancho;
-      onVistaRef.current(limitar({ cx: p.x - (p.x - v.cx) * r, cy: p.y - (p.y - v.cy) * r, ancho: nuevoAncho }));
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; // lineas -> pixeles
+      const factor = Math.exp(Math.max(-300, Math.min(300, delta)) * 0.0015);
+      // los pasos seguidos se acumulan sobre el destino de la animacion en curso
+      const base = animZoom.current?.hasta ?? vistaRef.current;
+      const nuevoAncho = Math.max(VB_W / 14, Math.min(VB_W, base.ancho * factor));
+      const r = nuevoAncho / base.ancho;
+      const hasta = limitar({ cx: p.x - (p.x - base.cx) * r, cy: p.y - (p.y - base.cy) * r, ancho: nuevoAncho });
+      if (animZoom.current) cancelAnimationFrame(animZoom.current.raf);
+      animZoom.current = { desde: vistaRef.current, hasta, t0: performance.now(), raf: 0 };
+      animZoom.current.raf = requestAnimationFrame(paso);
     };
     svg.addEventListener('wheel', alRodar, { passive: false });
-    return () => svg.removeEventListener('wheel', alRodar);
+    return () => {
+      svg.removeEventListener('wheel', alRodar);
+      if (animZoom.current) cancelAnimationFrame(animZoom.current.raf);
+    };
   }, []);
 
   // ---------------- capas ----------------
@@ -453,7 +529,9 @@ export default function MapaOperacion(props: Props) {
       onPointerMove={alMover}
       onPointerDown={alPresionar}
       onPointerUp={alSoltar}
-      onPointerLeave={() => {
+      onPointerCancel={soltarPuntero}
+      onPointerLeave={(e) => {
+        soltarPuntero(e);
         arrastre.current = null;
         setArrastrando(false);
         props.onHover(null, 0, 0);
@@ -564,7 +642,9 @@ export default function MapaOperacion(props: Props) {
               className="map-select-hit" data-tipo="vehiculo" data-id={v.id} transform={transformVehiculo(v, minuto, escala)}
               opacity={atenuado ? 0.6 : 1}>
               <circle r={12} fill={est.fill} stroke={sel ? '#0a2c43' : est.borde} strokeWidth={sel ? 3 : est.borde === '#fff' ? 1.5 : 2} />
-              <GlifoVehiculo tipo={v.tipo} color={est.glifo} />
+              <g data-glifo="" transform={orientacionGlifo(v, minuto)}>
+                <GlifoVehiculo tipo={v.tipo} color={est.glifo} />
+              </g>
               {urgencia && urgencia !== 'verde' && (
                 <circle cx={-9} cy={-9} r={4.2} fill={COLOR_SEMAFORO[urgencia]} stroke="#fff" strokeWidth={1.4} />
               )}

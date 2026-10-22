@@ -14,7 +14,7 @@ Estado: ⬜ pendiente · 🔄 en curso · ✅ hecho
 | 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | ✅ |
 | 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | ✅ |
 | 5. Cierre con la última planificación | G08–G10 | ✅ |
-| 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | 🔄 |
+| 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | ✅ |
 
 ## Detalle por fase
 
@@ -69,8 +69,47 @@ Hecho:
 - `ReportesCsv.java`: sección «Ultima planificacion estable» en el CSV del cierre (tolera cierres antiguos sin el campo).
 - `PantallaCierre.tsx`: sección «Última planificación estable (fecha simulada)» con una tabla por unidad: ruta, salida, paradas pendientes con llegada y regreso.
 
-### Fase 6
-Archivos: `MapaOperacion.tsx`, `app/globals.css`.
+### Fase 6 ✅
+Hecho:
+- C30, `MapaOperacion.tsx` (`orientacionGlifo`): el glifo de la UT (no el círculo) se voltea cuando va hacia la izquierda y gira ±90° en los tramos verticales; se actualiza en cada cuadro. Se asume que el glifo original «mira» a la derecha; si en pantalla se ve al revés, invertir `scale(-1,1)` (moverlo al caso `dx > 0`).
+- C08: zoom con la rueda proporcional a `deltaY` (`Math.exp(delta*0.0015)`, que equivale a la fórmula del enunciado aplicada al ancho visible) y animación de 150 ms con desaceleración; los pasos seguidos se acumulan.
+- C05:
+  - zoom con pellizco (dos punteros) en el mapa;
+  - por debajo de 820 px, el detalle pasa a hoja inferior del 50 % de alto;
+  - el panel de listas, el reloj 2×2 y los KPIs globales se reacomodan.
+
+## Verificación hecha (22/10/2026)
+- `npm run typecheck` y `npx next build` sin errores.
+- `mvnw -q clean test`: 17 pruebas, 0 fallos, 1 omitida (la de exploración, como antes).
+- **No se probó en el navegador**: los casos de abajo están pendientes de revisión manual.
+
+## Lo que falta (para otra persona)
+1. **Probar a mano** todos los casos de abajo y corregir lo visual (tamaños o solapes en pantallas pequeñas).
+2. **Recompilar el JAR** con `COMPILAR.bat` (o `scripts/linux/compilar.sh`) antes de desplegar: el `dist/paqrap-app.jar` actual no tiene estos cambios.
+3. **F09 con pedido pendiente**: hoy centra el destino porque el almacén de origen se decide al planificar. Si se quiere centrar «el almacén probable», usar el almacén con stock más cercano (`estado.almacenes`) en `ListaEnvios.enfocarPedido` (`PanelListas.tsx`).
+4. **F01 para pedidos sin unidad**: no se dibuja la línea almacén → destino. Se haría en `MapaOperacion.tsx` dibujando una línea discontinua cuando `seleccion.tipo === 'pedido'` y `vehiculosDePedido(...)` está vacío.
+5. **B04** (atributos por unidad en Parámetros): no se hizo; preparar la explicación de que se configuran por tipo.
+6. **C07**: quedan textos técnicos en Parámetros y en algunos mensajes del backend (errores de validación). Revisar con la app abierta.
+7. **Diagramas A22 y A23** (ver los datos de Sa, Sc y Ta en [auditoria_rubrica.md](auditoria_rubrica.md)): no se hicieron.
 
 ## Casos para probar a mano
-(se completa al final)
+Iniciar una corrida 5D (01/09/2026 00:00) y abrir Panorama.
+1. **Encabezado**: se ven los 4 tiempos rotulados al minuto; «Transcurrido simulado» avanza unas 2,7 h por cada minuto real a ×160; «Fecha y hora actual» coincide con el reloj de Lima.
+2. **KPIs globales**: «Ocupación de flota» y «Ocupación de almacenes» se ven en todas las pestañas y cambian de color.
+3. **Colores**: una UT en el almacén se ve **vacía** (blanca con borde gris oscuro); al cargar pasa a verde, ámbar o rojo según n/cap. Los almacenes intermedios bajan de color al despachar y suben al recargar a las 23:59:59. El central queda azul con «sin límite».
+4. **Urgencia**: aparece un punto ámbar o rojo en la esquina de una UT que lleva un pedido en riesgo; el tooltip dice «Urgencia de plazo».
+5. **Averías**: en el detalle de una UT en ruta, «Tipo 1/2/3» → la UT se pone gris con la insignia 1 (amarilla), 2 (naranja) o 3 (morada); el tooltip dice «Avería tipo N · hasta …». Con «Mostrar unidades en almacén», la UT en taller muestra la llave.
+6. **Bloqueos**: se ven en magenta y la leyenda coincide.
+7. **Panel → Transporte**:
+   - ordenar por Ocupación, Llega y Salió (▲/▼);
+   - escribir 30 en «Llega a destino en ≤» filtra la lista;
+   - desplegar ▸ muestra los pedidos con su cantidad;
+   - clic en una fila centra el mapa en la UT y abre su detalle; clic en una UT del mapa resalta su fila.
+8. **Filtros de semáforo**: desmarcar «Vacío» oculta las UT vacías en la lista **y** en el mapa; lo mismo para almacenes (pestaña Almacenes o «Filtros»).
+9. **Panel → Almacenes**: cambiar 1/2/4/8 h cambia «por salir» y «entregados»; clic centra el almacén y abre su detalle; clic en el almacén del mapa resalta la fila.
+10. **Panel → Envíos**: buscar un pedido; desplegar sus partes (unidad, ruta, salida y llegada); clic centra la UT que lo lleva.
+11. **Ver ruta en el mapa**: desde la pestaña Pedidos, abrir un pedido dividido (sufijos -1, -2) → «Ver ruta en el mapa» → va a Panorama, centra y resalta las rutas de **todas** sus unidades.
+12. **Detalle de la UT**: sección «Tramos de la ruta» con origen → destino, «sale» y «llega».
+13. **Cierre**: detener la corrida → sección «Última planificación estable (fecha)» con las rutas vigentes; el CSV trae la misma sección. Repetir con colapso y con día a día.
+14. **Zoom y móvil**: la rueda acerca de forma suave; en un celular (o en las herramientas de desarrollador a 375 px), el pellizco hace zoom y el detalle aparece como hoja inferior.
+15. **Varios navegadores (G06/A23)**: abrir 3 o más dispositivos; cada uno tiene su propio panel, filtros y zoom.
