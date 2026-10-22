@@ -1,8 +1,11 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EstadoVisual, VehiculoVisual } from '@/lib/tipos';
-import { COLOR_SEMAFORO, semaforo } from '@/lib/formato';
+import type { AlmacenVisual, EstadoVisual, VehiculoVisual } from '@/lib/tipos';
+import {
+  BORDE_VACIO, COLOR_BLOQUEO, COLOR_OCUPACION, COLOR_SEMAFORO, porcentaje, type Semaforo, semaforo, semaforoOcupacion,
+  type SemaforoOcupacion,
+} from '@/lib/formato';
 import { posicionEnTrayectoria } from '@/lib/useEstadoSimulacion';
 import { GlifoAlmacen, GlifoPaquete, GlifoVehiculo } from './Iconos';
 
@@ -79,10 +82,33 @@ interface Props {
 
 const EN_BASE = new Set(['EN_ALMACEN', 'MANTENIMIENTO', 'EN_TALLER']);
 
-function colorVehiculo(v: VehiculoVisual, verde: number, ambar: number): string {
-  if (v.estado === 'AVERIADA' || v.estado === 'EN_TALLER') return GRIS;
-  if (v.holguraMinima == null) return NAVY;
-  return COLOR_SEMAFORO[semaforo(v.holguraMinima, verde, ambar)];
+export const FUERA_DE_SERVICIO = new Set(['AVERIADA', 'EN_TALLER']);
+
+/** Semaforo de ocupacion de la unidad (C27): 100 * carga / capacidad. */
+export function ocupacionVehiculo(v: VehiculoVisual, verde: number, ambar: number): { pct: number; sem: SemaforoOcupacion } {
+  const pct = porcentaje(v.carga, v.capacidad);
+  return { pct, sem: semaforoOcupacion(pct, verde, ambar) };
+}
+
+/** Ocupacion de un almacen intermedio (C21): 100 * stock / capacidad; el central no tiene semaforo. */
+export function ocupacionAlmacen(a: AlmacenVisual, verde: number, ambar: number): { pct: number; sem: SemaforoOcupacion } | null {
+  if (a.central || a.capacidad == null) return null;
+  const pct = porcentaje(a.stock ?? 0, a.capacidad);
+  return { pct, sem: semaforoOcupacion(pct, verde, ambar) };
+}
+
+/** Relleno, borde y color del glifo de la insignia de la unidad. La averia/taller es gris; el resto, por ocupacion. */
+function estiloVehiculo(v: VehiculoVisual, verde: number, ambar: number) {
+  if (FUERA_DE_SERVICIO.has(v.estado)) return { fill: GRIS, borde: '#fff', glifo: '#fff' };
+  const { sem } = ocupacionVehiculo(v, verde, ambar);
+  if (sem === 'vacio') return { fill: COLOR_OCUPACION.vacio, borde: BORDE_VACIO, glifo: BORDE_VACIO };
+  return { fill: COLOR_OCUPACION[sem], borde: '#fff', glifo: '#fff' };
+}
+
+/** Urgencia de plazo de la unidad (pedido mas urgente a bordo): solo se marca en riesgo o critico. */
+export function urgenciaVehiculo(v: VehiculoVisual, verde: number, ambar: number): Semaforo | null {
+  if (v.holguraMinima == null) return null;
+  return semaforo(v.holguraMinima, verde, ambar);
 }
 
 const sy = (y: number) => ALTO_KM - y;
@@ -401,7 +427,7 @@ export default function MapaOperacion(props: Props) {
             const pts: string[] = [];
             for (let i = 0; i < b.puntos.length; i += 2) pts.push(`${b.puntos[i]},${sy(b.puntos[i + 1])}`);
             return (
-              <polyline key={b.id} points={pts.join(' ')} fill="none" stroke="#c0392b" strokeWidth={5}
+              <polyline key={b.id} points={pts.join(' ')} fill="none" stroke={COLOR_BLOQUEO} strokeWidth={5}
                 strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={0.9}>
                 <title>{`Calle bloqueada (${b.id}) — dato real del curso`}</title>
               </polyline>
@@ -438,20 +464,21 @@ export default function MapaOperacion(props: Props) {
           strokeLinecap="round" vectorEffect="non-scaling-stroke" visibility="hidden" pointerEvents="none" />
 
         {estado.almacenes.map((a) => {
-          const pct = a.capacidad ? (100 * (a.stock ?? 0)) / a.capacidad : null;
-          const color = pct == null ? NAVY : COLOR_SEMAFORO[semaforo(pct, verde, ambar)];
+          const ocup = ocupacionAlmacen(a, verde, ambar);
+          const vacio = ocup?.sem === 'vacio';
+          const color = ocup == null ? NAVY : COLOR_OCUPACION[ocup.sem];
           const sel = seleccion?.tipo === 'almacen' && seleccion.id === a.id;
           const n = conteoEnAlmacen.get(a.id) ?? 0;
           return (
             <g key={a.id} className="map-select-hit" data-tipo="almacen" data-id={a.id}
               transform={`translate(${a.x},${sy(a.y)}) scale(${escala})`}>
-              <rect x={-13} y={-13} width={26} height={26} rx={6} fill={color} stroke={sel ? NAVY : '#fff'} strokeWidth={sel ? 3 : 1.5} />
-              <GlifoAlmacen />
+              <rect x={-13} y={-13} width={26} height={26} rx={6} fill={color} stroke={sel ? NAVY : vacio ? BORDE_VACIO : '#fff'} strokeWidth={sel ? 3 : vacio ? 2 : 1.5} />
+              <GlifoAlmacen color={vacio ? BORDE_VACIO : '#fff'} />
               <text y={27} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0a2c43" stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
                 {a.nombre}
               </text>
-              <text y={39} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={color} stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
-                {a.capacidad == null ? 'Stock: sin límite' : `Stock ${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(pct ?? 0)} %)`}
+              <text y={39} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={vacio ? BORDE_VACIO : color} stroke="#fbfcfe" strokeWidth={3} paintOrder="stroke">
+                {a.capacidad == null ? 'Stock: sin límite' : `Stock ${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(ocup?.pct ?? 0)} %)`}
               </text>
               {n > 0 && (
                 <g transform="translate(14,-14)">
@@ -482,7 +509,8 @@ export default function MapaOperacion(props: Props) {
 
         {vehiculosVisibles.map((v) => {
           const sel = vehiculoResaltado === v.id;
-          const color = colorVehiculo(v, verde, ambar);
+          const est = estiloVehiculo(v, verde, ambar);
+          const urgencia = FUERA_DE_SERVICIO.has(v.estado) ? null : urgenciaVehiculo(v, verde, ambar);
           const atenuado = v.estado === 'ALIMENTACION' || v.estado === 'MANTENIMIENTO' || (vehiculoResaltado && !sel);
           return (
             <g key={v.id} ref={(el) => {
@@ -491,8 +519,11 @@ export default function MapaOperacion(props: Props) {
             }}
               className="map-select-hit" data-tipo="vehiculo" data-id={v.id} transform={transformVehiculo(v, minuto, escala)}
               opacity={atenuado ? 0.6 : 1}>
-              <circle r={12} fill={color} stroke={sel ? '#0a2c43' : '#fff'} strokeWidth={sel ? 3 : 1.5} />
-              <GlifoVehiculo tipo={v.tipo} />
+              <circle r={12} fill={est.fill} stroke={sel ? '#0a2c43' : est.borde} strokeWidth={sel ? 3 : est.borde === '#fff' ? 1.5 : 2} />
+              <GlifoVehiculo tipo={v.tipo} color={est.glifo} />
+              {urgencia && urgencia !== 'verde' && (
+                <circle cx={-9} cy={-9} r={4.2} fill={COLOR_SEMAFORO[urgencia]} stroke="#fff" strokeWidth={1.4} />
+              )}
             </g>
           );
         })}

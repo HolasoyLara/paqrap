@@ -248,12 +248,10 @@ export default function Pagina() {
       <main className={pantallaMapa ? 'main-mapa' : undefined}>
         {(sinBackend || (errorConfig && !config)) && (
           <div className="banner banner-error">
-            <b>No se puede conectar con el backend de PaqRap.</b> {error ?? errorConfig}. Verifique que el servicio Spring Boot esté en
-            marcha (scripts <code>INICIAR</code>) o, si este visualizador está publicado en Vercel, que la variable <code>BACKEND_URL</code>
-            apunte a la URL pública del backend. Se reintenta automáticamente.
+            <b>No hay conexión con el servidor de PaqRap.</b> Intente nuevamente en unos segundos.
           </div>
         )}
-        {estado && error && <div className="banner banner-error">Conexión inestable con el backend: {error}. Reintentando…</div>}
+        {estado && error && <div className="banner banner-error">Conexión inestable con el servidor de PaqRap. Reintentando…</div>}
 
         {pestana === 'parametros' && config && form && (
           <PantallaParametros

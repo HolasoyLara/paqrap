@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, enlaces } from '@/lib/api';
 import type { CierreCorrida, CorridaHistorial, EstadoVisual } from '@/lib/tipos';
-import { duracion, numero, soles } from '@/lib/formato';
+import { duracion, etiquetaCodigo, numero, soles } from '@/lib/formato';
 
 interface Props {
   estado: EstadoVisual | null;
@@ -141,12 +141,12 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
             <Kpi etiqueta="Cumplimiento total" valor={`${numero(r.cumplimiento, 2)} %`} sub={`${numero(r.pedidosRegistrados)} pedidos · ${numero(r.entregadosATiempo)} entregados a tiempo`} />
             <Kpi etiqueta="Costo total" valor={soles(r.costoTotal)} sub={`${soles(r.costoPorPedidoEntregado, 2)} por pedido entregado`} />
             <Kpi etiqueta="Km recorridos" valor={`${numero(r.kmTotal)} km`} sub={`${numero(r.rutasDespachadas)} rutas despachadas`} />
-            <Kpi etiqueta="Re-ruteos totales" valor={String(r.reRuteosBloqueo + r.reRuteosAveria)} sub={`${r.reasignaciones} reasignaciones de carga · ${r.reprogramaciones} reprogramaciones`} />
+            <Kpi etiqueta="Rutas recalculadas" valor={String(r.reRuteosBloqueo + r.reRuteosAveria)} sub={`${r.reasignaciones} reasignaciones de carga · ${r.reprogramaciones} reprogramaciones`} />
             <Kpi etiqueta="Tiempo real de ejecución" valor={duracion(cierre.duracionRealSeg)} sub={`cómputo del planificador: ${numero(r.tiempoComputoPlanificadorMs / 1000, 1)} s en ${r.planificaciones} ventanas`} />
             <Kpi etiqueta="Semilla utilizada" valor={String(cierre.semilla)} sub={`algoritmo: ${ALGORITMO[cierre.algoritmo]}`} />
           </div>
           <div className="rerouting-breakdown">
-            <span>Desglose de re-ruteos — por calle bloqueada: <b>{r.reRuteosBloqueo}</b></span>
+            <span>Desglose de rutas recalculadas — por calle bloqueada: <b>{r.reRuteosBloqueo}</b></span>
             <span>por avería: <b>{r.reRuteosAveria}</b></span>
             <span>entregados fuera de plazo: <b>{r.entregadosTarde}</b></span>
             <span>en curso al cierre: <b>{r.enCurso}</b></span>
@@ -228,7 +228,7 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
                 </table>
               ) : <p className="empty-hint">Sin averías en la corrida.</p>}
               <p className="hint" style={{ marginTop: 8 }}>
-                Eventos: {Object.entries(cierre.incidencias.eventosPorTipo).map(([k, v]) => `${k.toLowerCase().replace('_', ' ')} ${v}`).join(' · ') || 'ninguno'}
+                Eventos: {Object.entries(cierre.incidencias.eventosPorTipo).map(([k, v]) => `${etiquetaCodigo(k)}: ${v}`).join(' · ') || 'ninguno'}
               </p>
             </div>
             <div className="card">

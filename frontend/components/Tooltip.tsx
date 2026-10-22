@@ -2,8 +2,8 @@
 
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import type { EstadoVisual } from '@/lib/tipos';
-import { ETIQUETA_SEMAFORO, ETIQUETA_TIPO_VEHICULO, semaforo } from '@/lib/formato';
-import type { Seleccion } from './MapaOperacion';
+import { claseOcupacion, ETIQUETA_OCUPACION, ETIQUETA_SEMAFORO, ETIQUETA_TIPO_VEHICULO, semaforo } from '@/lib/formato';
+import { ocupacionAlmacen, ocupacionVehiculo, type Seleccion } from './MapaOperacion';
 
 export interface TooltipApi {
   mostrar: (s: Seleccion | null, x: number, y: number) => void;
@@ -43,12 +43,14 @@ const Tooltip = forwardRef<TooltipApi, { estado: EstadoVisual; minuto: () => num
     const v = estado.vehiculos.find((x) => x.id === s.id);
     if (!v) return null;
     const sem = v.holguraMinima == null ? null : semaforo(v.holguraMinima, estado.umbralVerde, estado.umbralAmbar);
+    const ocup = ocupacionVehiculo(v, estado.umbralVerde, estado.umbralAmbar);
     contenido = (
       <>
         <div className="tt-title">Vehículo {v.id} · {ETIQUETA_TIPO_VEHICULO[v.tipo]}</div>
         <div className="tt-row"><span>Estado</span><b>{v.estadoEtiqueta}</b></div>
-        <div className="tt-row"><span>Carga</span><b>{v.carga} / {v.capacidad} paquetes</b></div>
-        {sem && <div className="tt-row"><span>Semáforo</span><b>{ETIQUETA_SEMAFORO[sem]}</b></div>}
+        <div className="tt-row"><span>Ocupación</span>
+          <b>{v.carga} / {v.capacidad} ({Math.round(ocup.pct)} %) <span className={claseOcupacion(ocup.sem)}>{ETIQUETA_OCUPACION[ocup.sem]}</span></b></div>
+        {sem && <div className="tt-row"><span>Urgencia de plazo</span><b>{ETIQUETA_SEMAFORO[sem]}</b></div>}
         <div className="tt-row"><span>Próxima parada</span><b>{v.destino || '—'}</b></div>
       </>
     );
@@ -69,14 +71,14 @@ const Tooltip = forwardRef<TooltipApi, { estado: EstadoVisual; minuto: () => num
   } else {
     const a = estado.almacenes.find((x) => x.id === s.id);
     if (!a) return null;
-    const pct = a.capacidad ? (100 * (a.stock ?? 0)) / a.capacidad : null;
-    const sem = pct == null ? null : semaforo(pct, estado.umbralVerde, estado.umbralAmbar);
+    const ocup = ocupacionAlmacen(a, estado.umbralVerde, estado.umbralAmbar);
+    const pct = ocup?.pct ?? null;
     const enAlmacen = estado.vehiculos.filter((v) => v.tray.length === 0 && Math.abs(v.x - a.x) < 1e-6 && Math.abs(v.y - a.y) < 1e-6).map((v) => v.id);
     contenido = (
       <>
         <div className="tt-title">{a.nombre}</div>
         <div className="tt-row"><span>Stock</span><b>{a.capacidad == null ? 'Sin límite' : `${(a.stock ?? 0).toLocaleString('es-PE')} / ${a.capacidad.toLocaleString('es-PE')} (${Math.round(pct ?? 0)} %)`}</b></div>
-        {sem && <div className="tt-row"><span>Semáforo de stock</span><b>{ETIQUETA_SEMAFORO[sem]}</b></div>}
+        {ocup && <div className="tt-row"><span>Ocupación</span><b><span className={claseOcupacion(ocup.sem)}>{ETIQUETA_OCUPACION[ocup.sem]}</span></b></div>}
         <div className="tt-row"><span>Unidades en el almacén ({enAlmacen.length})</span><b>{enAlmacen.slice(0, 8).join(', ') || 'Ninguna'}{enAlmacen.length > 8 ? '…' : ''}</b></div>
         <div className="tt-row"><span>Unidades que arriban ({a.arriban.length})</span><b>{a.arriban.slice(0, 5).join(' · ') || 'Ninguna'}{a.arriban.length > 5 ? '…' : ''}</b></div>
       </>

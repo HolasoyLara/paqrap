@@ -3,10 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import type { EstadoVisual } from '@/lib/tipos';
-import { fechaHoraCorta, numero, semaforo, soles } from '@/lib/formato';
+import {
+  BORDE_VACIO, COLOR_BLOQUEO, COLOR_OCUPACION, ETIQUETA_OCUPACION, numero, semaforo, type SemaforoOcupacion, soles,
+} from '@/lib/formato';
 import MapaOperacion, {
-  acercar, centrarEn, FILTROS_POR_DEFECTO, type Filtros, type Seleccion, type Vista, VISTA_COMPLETA, vistaDeZona,
+  acercar, centrarEn, FILTROS_POR_DEFECTO, type Filtros, ocupacionAlmacen, type Seleccion, type Vista, VISTA_COMPLETA, vistaDeZona,
 } from './MapaOperacion';
+
+/** Rango de ocupacion de cada color con los umbrales vigentes (verde/ambar se aplican al espacio libre). */
+function RANGO_OCUPACION(s: SemaforoOcupacion, verde: number, ambar: number): string {
+  const v = Math.round(100 - verde);
+  const a = Math.round(100 - ambar);
+  if (s === 'vacio') return '(0 %)';
+  if (s === 'verde') return `(hasta ${v} %)`;
+  if (s === 'ambar') return `(${v} – ${a} %)`;
+  return `(más de ${a} %)`;
+}
 import Tooltip, { type TooltipApi } from './Tooltip';
 import { IconoMini } from './Iconos';
 
@@ -212,13 +224,13 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
             <Kpi etiqueta="Flota activa" valor={`${k.flotaActiva} / ${k.flotaTotal}`} sub="vehículos operativos (sin avería ni mantenimiento)" />
             <Kpi etiqueta="Almacén central" valor="Sin límite" sub="Abastecimiento permanente (sin capacidad máxima)" />
             {intermedios.map((a) => {
-              const pct = a.capacidad ? (100 * (a.stock ?? 0)) / a.capacidad : 0;
+              const o = ocupacionAlmacen(a, estado.umbralVerde, estado.umbralAmbar);
               return (
-                <Kpi key={a.id} etiqueta={`Stock ${a.nombre}`} valor={`${numero(a.stock ?? 0)} / ${numero(a.capacidad ?? 0)}`}
-                  sub="recarga diaria 23:59:59" sem={semaforo(pct, estado.umbralVerde, estado.umbralAmbar)} />
+                <Kpi key={a.id} etiqueta={`Stock ${a.nombre}`} valor={`${numero(a.stock ?? 0)} / ${numero(a.capacidad ?? 0)} (${numero(o?.pct ?? 0)} %)`}
+                  sub={`${o ? ETIQUETA_OCUPACION[o.sem] : ''} · recarga diaria 23:59:59`} sem={o && o.sem !== 'vacio' ? o.sem : null} />
               );
             })}
-            <Kpi etiqueta="Re-ruteos totales" valor={String(k.reRuteosBloqueo + k.reRuteosAveria)}
+            <Kpi etiqueta="Rutas recalculadas" valor={String(k.reRuteosBloqueo + k.reRuteosAveria)}
               sub={`bloqueo: ${k.reRuteosBloqueo} · avería: ${k.reRuteosAveria} · reasignaciones: ${k.reasignaciones}`} />
           </div>
         )}
@@ -226,13 +238,26 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
         {leyenda && (
           <div className="panel-flot panel-leyenda" onPointerDown={(e) => e.stopPropagation()}>
             <div className="legend">
+              <div className="subtitulo">Pedidos · semáforo de plazo</div>
               <div className="legend-item"><IconoMini tipo="pedido" color="#2e7d46" />Paquete = pedido a tiempo</div>
               <div className="legend-item"><IconoMini tipo="pedido" color="#c98a10" />Paquete = pedido en riesgo</div>
               <div className="legend-item"><IconoMini tipo="pedido" color="#c0392b" />Paquete = pedido vencido / crítico</div>
-              <div className="legend-item"><IconoMini tipo="vehiculo" color="#0f3d5c" forma="AUTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="MOTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="BICICLETA" />Auto / moto / bicicleta (color = pedido más urgente a bordo)</div>
-              <div className="legend-item"><IconoMini tipo="vehiculo" color="#8695a3" forma="AUTO" />Vehículo averiado</div>
-              <div className="legend-item"><IconoMini tipo="almacen" color="#0f3d5c" />Edificio = almacén (color = semáforo de su stock; el central no aplica)</div>
-              <div className="legend-item"><span className="legend-line" style={{ borderColor: '#c0392b', borderTopWidth: 5 }} />Calle bloqueada (dato real del curso)</div>
+              <div className="subtitulo" style={{ marginTop: 6 }}>Unidades y almacenes intermedios · semáforo de ocupación</div>
+              {(['vacio', 'verde', 'ambar', 'rojo'] as const).map((s) => (
+                <div className="legend-item" key={s}>
+                  <IconoMini tipo="vehiculo" color={COLOR_OCUPACION[s]} forma="AUTO" borde={s === 'vacio' ? BORDE_VACIO : undefined} />
+                  <IconoMini tipo="almacen" color={COLOR_OCUPACION[s]} borde={s === 'vacio' ? BORDE_VACIO : undefined} />
+                  {ETIQUETA_OCUPACION[s]} {RANGO_OCUPACION(s, estado.umbralVerde, estado.umbralAmbar)}
+                </div>
+              ))}
+              <div className="legend-item"><IconoMini tipo="vehiculo" color="#0f3d5c" forma="AUTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="MOTO" /><IconoMini tipo="vehiculo" color="#0f3d5c" forma="BICICLETA" />Forma = auto / moto / bicicleta</div>
+              <div className="legend-item"><svg width={18} height={18} viewBox="-9 -9 18 18" aria-hidden><circle r={4.5} fill="#c98a10" stroke="#fff" strokeWidth={1.4} /></svg>
+                <svg width={18} height={18} viewBox="-9 -9 18 18" aria-hidden><circle r={4.5} fill="#c0392b" stroke="#fff" strokeWidth={1.4} /></svg>
+                Punto en la esquina = urgencia de plazo (lleva un pedido en riesgo o crítico)</div>
+              <div className="legend-item"><IconoMini tipo="almacen" color="#0f3d5c" />Almacén central: sin límite de stock, no lleva semáforo</div>
+              <div className="subtitulo" style={{ marginTop: 6 }}>Circunstancias</div>
+              <div className="legend-item"><IconoMini tipo="vehiculo" color="#8695a3" forma="AUTO" />Vehículo averiado o en taller</div>
+              <div className="legend-item"><span className="legend-line" style={{ borderColor: COLOR_BLOQUEO, borderTopWidth: 5 }} />Calle bloqueada (dato real del curso)</div>
               <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#a15b16', borderTopWidth: 5 }} />Calle bloqueada manualmente (clic en el mapa)</div>
               <div className="legend-item"><span className="legend-line dashed" style={{ borderColor: '#0f3d5c' }} />Ruta asignada (más tenue = vehículo no seleccionado)</div>
               <div className="legend-item"><span className="hint">Retícula de 70 × 50 km; cada línea es una calle (1 km).</span></div>
@@ -247,7 +272,6 @@ export default function PantallaPanorama({ estado, minutoAhora, seleccion, onAbr
           </div>
         )}
 
-        <div className="map-overlay-hora">Hora simulada: {fechaHoraCorta(estado.inicioMs + minutoAhora() * 60000)}</div>
       </div>
 
       <Tooltip ref={tooltip} estado={estado} minuto={minutoAhora} />
