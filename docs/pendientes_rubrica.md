@@ -11,8 +11,8 @@ Estado: ⬜ pendiente · 🔄 en curso · ✅ hecho
 | 2. Backend + frontend: averías por tipo y horarios de la UT | D10–D13 (+ datos para E06, E13) | ✅ |
 | 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | ✅ |
 | 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | ✅ |
-| 5. Cierre con la última planificación | G08–G10 | 🔄 |
-| 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | ⬜ |
+| 5. Cierre con la última planificación | G08–G10 | ✅ |
+| 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | 🔄 |
 
 ## Detalle por fase
 
@@ -60,8 +60,12 @@ Hecho:
   - un pedido pendiente aún no tiene almacén de origen (lo decide el planificador), así que F09 centra el destino;
   - la lista de envíos muestra solo los pedidos activos (los entregados están en la pestaña Pedidos), hasta 300 filas, con buscador.
 
-### Fase 5
-Archivos: `CierreCorrida.java`, `MotorSimulacion.java` (generarCierre), `api/ReportesCsv.java`, `PantallaCierre.tsx`, `tipos.ts`.
+### Fase 5 ✅
+Hecho:
+- `CierreCorrida.java`: nuevo campo al final `ultimaPlanificacion` (`UltimaPlanificacion{fecha, causa, rutas}`, `RutaVigente`, `ParadaPlan`).
+- `MotorSimulacion.java`: guarda la hora y la causa de la última llamada a `planificar()` (solo como salida) y `ultimaPlanificacion()` arma las rutas vigentes en `generarCierre`. Sirve igual para 5D, día a día (al detener) y colapso.
+- `ReportesCsv.java`: sección «Ultima planificacion estable» en el CSV del cierre (tolera cierres antiguos sin el campo).
+- `PantallaCierre.tsx`: sección «Última planificación estable (fecha simulada)» con una tabla por unidad: ruta, salida, paradas pendientes con llegada y regreso.
 
 ### Fase 6
 Archivos: `MapaOperacion.tsx`, `app/globals.css`.

@@ -577,9 +577,15 @@ public class MotorSimulacion {
     // Planificacion
     // =====================================================================
 
+    /** Solo para el cierre (G08-G10): hora y causa de la ultima planificacion. */
+    private double horaUltimaPlanificacion = Double.NaN;
+    private String causaUltimaPlanificacion = "";
+
     private void planificar(double t, String causa) {
         red.descartarCacheAnteriorA(t);
         planificaciones++;
+        horaUltimaPlanificacion = t;
+        causaUltimaPlanificacion = causa;
         reprogramarInviables(t);
         reubicarUnidadesSinStock(t);
 
@@ -1733,6 +1739,25 @@ public class MotorSimulacion {
     // Cierre (V-3, reportes D15-D25)
     // =====================================================================
 
+    /** G08-G10: rutas vigentes al momento del cierre (la ultima planificacion estable). Se llama con el candado tomado. */
+    private CierreCorrida.UltimaPlanificacion ultimaPlanificacion() {
+        List<CierreCorrida.RutaVigente> rutas = new ArrayList<>();
+        for (VehiculoSim vs : vehiculos) {
+            RutaEnCurso r = vs.getRuta();
+            if (r == null) continue;
+            List<CierreCorrida.ParadaPlan> paradas = new ArrayList<>();
+            for (ParadaEnCurso p : r.getParadas()) {
+                if (!p.estaPendiente()) continue;
+                paradas.add(new CierreCorrida.ParadaPlan(p.getParte().getIdPedido(), p.getParte().getCantidadUnidades(), fecha(p.getHoraLlegada())));
+            }
+            rutas.add(new CierreCorrida.RutaVigente(vs.getId(), vs.getVehiculo().getTipo().getEtiqueta(), r.getIdRuta(),
+                    r.getAlmacenSalida().getNombre(), fecha(r.getHoraInicio()), paradas, r.getAlmacenRetorno().getNombre(),
+                    fecha(r.getHoraRegreso())));
+        }
+        return new CierreCorrida.UltimaPlanificacion(Double.isNaN(horaUltimaPlanificacion) ? "—" : fecha(horaUltimaPlanificacion),
+                describirCausa(causaUltimaPlanificacion), rutas);
+    }
+
     public CierreCorrida generarCierre(String estadoCorrida, long inicioRealMs, long finRealMs) {
         return conCandado(() -> {
             double t = horaActual;
@@ -1852,7 +1877,8 @@ public class MotorSimulacion {
             return new CierreCorrida(idCorrida, parametros.getEscenario().name(), parametros.getEscenario().getEtiqueta(),
                     parametros.getAlgoritmo(), parametros.getSemilla(), fecha(horaInicio), fecha(t), redondear(t - horaInicio, 3),
                     estadoCorrida, motivoFin, inicioRealMs, finRealMs, Math.max(0, (finRealMs - inicioRealMs) / 1000), resumen, dias,
-                    porTipo, uso, incidencias, verificacion, colapso, resumenParametros, datos.getDescripcionFuentes());
+                    porTipo, uso, incidencias, verificacion, colapso, resumenParametros, datos.getDescripcionFuentes(),
+                    ultimaPlanificacion());
         });
     }
 

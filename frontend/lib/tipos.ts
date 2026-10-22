@@ -401,6 +401,21 @@ export interface CierreCorrida {
   colapso: InfoColapso | null;
   parametros: Record<string, unknown>;
   fuentes: Record<string, string>;
+  /** G08-G10: rutas vigentes al cierre (null en corridas guardadas antes de este cambio). */
+  ultimaPlanificacion: {
+    fecha: string;
+    causa: string;
+    rutas: {
+      vehiculo: string;
+      tipo: string;
+      ruta: string;
+      almacenSalida: string;
+      salida: string;
+      paradas: { pedido: string; cantidad: number; llegada: string }[];
+      almacenRetorno: string;
+      regreso: string;
+    }[];
+  } | null;
 }
 
 export interface FilaPedido {

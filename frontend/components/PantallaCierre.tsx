@@ -246,6 +246,45 @@ export default function PantallaCierre({ estado, cierreRecibido }: Props) {
             </div>
           </div>
 
+          <h3 style={{ marginTop: 22 }}>
+            Última planificación estable {cierre.ultimaPlanificacion ? `(${cierre.ultimaPlanificacion.fecha} simulada)` : ''}
+          </h3>
+          {!cierre.ultimaPlanificacion ? (
+            <p className="empty-hint">Esta corrida se guardó antes de que el cierre incluyera la última planificación.</p>
+          ) : cierre.ultimaPlanificacion.rutas.length === 0 ? (
+            <p className="empty-hint">Al cierre no quedaban rutas vigentes: todas las unidades estaban en su almacén.</p>
+          ) : (
+            <>
+              <p className="hint">
+                Origen: {cierre.ultimaPlanificacion.causa} · {cierre.ultimaPlanificacion.rutas.length} unidades con ruta vigente al cierre
+                {' '}(pedidos pendientes de entregar en cada ruta, en orden de visita).
+              </p>
+              <div className="tabla-scroll" style={{ maxHeight: 360 }}>
+                <table className="daily-table">
+                  <thead>
+                    <tr><th>Unidad</th><th>Ruta</th><th>Sale de</th><th>Paradas (pedido · paquetes · llegada)</th><th>Regresa a</th></tr>
+                  </thead>
+                  <tbody>
+                    {cierre.ultimaPlanificacion.rutas.map((r) => (
+                      <tr key={r.vehiculo}>
+                        <td><b>{r.vehiculo}</b><div className="hint">{r.tipo}</div></td>
+                        <td>{r.ruta}</td>
+                        <td>{r.almacenSalida}<div className="hint">{r.salida}</div></td>
+                        <td>
+                          {r.paradas.length === 0 ? <span className="hint">Sin paradas pendientes (retorno o reubicación)</span>
+                            : r.paradas.map((p, i) => (
+                              <div key={p.pedido + i}>{i + 1}. {p.pedido} · {p.cantidad} paq. · {p.llegada}</div>
+                            ))}
+                        </td>
+                        <td>{r.almacenRetorno}<div className="hint">{r.regreso}</div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
           <h3 style={{ marginTop: 22 }}>Utilización de la flota (D18)</h3>
           <div className="tabla-scroll" style={{ maxHeight: 320 }}>
             <table className="daily-table">
