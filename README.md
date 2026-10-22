@@ -344,6 +344,7 @@ En Linux o macOS, desde la carpeta `backend`, use `./mvnw test`.
 | Prueba | Qué verifica |
 |---|---|
 | `MotorSimulacionTest` | Escenario 5D completo con los datos reales de setiembre de 2026, con el GA y con el ACO. Comprueba el fin del periodo, la cantidad de pedidos y que el cumplimiento sea mayor a 95 %. |
+| `ReglasCursoTest` | Reglas del documento de Preguntas y Respuestas: los 3 tipos de avería, la pausa de alimentación y el cambio de turno, el mantenimiento preventivo bimestral y los formatos de ventas y bloqueos. |
 | `ApiIntegracionTest` | Recorrido de punta a punta por la API: configuración, archivos, corrida día a día con un pedido manual, y cierre. |
 | `ReasignacionCargaTest` | Avería de tipo 2 con un pedido de 4 h que ya no puede reponerse desde el almacén: otra unidad en camino lo atiende primero (B10, B11). |
 | `ExploracionColapsoTest` | Exploración de fechas de colapso. No corre por defecto; se activa con `-Dpaqrap.explorar=true`. |
@@ -356,7 +357,7 @@ Verificación hecha sobre esta entrega (10-oct-2026, Windows 11):
   - la web responde en `/`, la API en `/api/*`, y una corrida 5D avanza a ×160;
   - `DETENER.bat` la cierra, el puerto queda libre y la corrida detenida aparece en el historial después de reiniciar.
 - Visualizador probado en el navegador: parámetros, animación del mapa, *tooltip*, modales, avería registrada desde la interfaz, bloqueo manual, cierre y pedidos (incluido un registro manual en día a día). El experimento con prueba t se probó por la API.
-- Pruebas automáticas del backend (`mvnw test`): 6 ejecutadas, 0 fallos, 1 omitida (la de exploración). Resultados de la simulación 5D del 1 al 5 de setiembre de 2026, con la semilla por defecto y sin reloj:
+- Pruebas automáticas del backend (`mvnw test`): 17 ejecutadas, 0 fallos, 1 omitida (la de exploración). Resultados de la simulación 5D del 1 al 5 de setiembre de 2026, con la semilla por defecto y sin reloj:
 
   | Algoritmo | Pedidos | Entregados a tiempo | Entregados tarde | En curso al cierre | Cumplimiento | Costo | km | Cómputo del planificador |
   |---|---|---|---|---|---|---|---|---|
