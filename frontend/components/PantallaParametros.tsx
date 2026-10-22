@@ -5,6 +5,8 @@ import type { Configuracion, ParametrosCorrida, ResumenArchivo } from '@/lib/tip
 
 interface Props {
   config: Configuracion;
+  /** Modo de la barra lateral: la simulacion lista 5D y colapso; la operacion dia a dia es tiempo real. */
+  modo: 'simulacion' | 'diaria';
   form: ParametrosCorrida;
   setForm: (f: ParametrosCorrida) => void;
   archivos: ResumenArchivo[] | null;
@@ -54,12 +56,18 @@ export default function PantallaParametros(props: Props) {
 
   return (
     <section>
-      <h2>Parámetros de la corrida</h2>
+      <h2>{props.modo === 'diaria' ? 'Parámetros de la operación día a día' : 'Parámetros de la simulación'}</h2>
       <p className="note">
-        Elige el escenario de la corrida (día a día, simulación del periodo o colapso logístico) y la fecha de inicio. El planificador
+        {props.modo === 'diaria' ? 'La operación día a día corre en tiempo real desde la fecha de inicio.' : 'Elige la simulación (periodo de 5 días o colapso logístico) y la fecha de inicio.'} El planificador
         es el Algoritmo Genético (GA) y la semilla es fija, así que misma fecha + mismos archivos = misma corrida. El escenario queda
         fijo una vez iniciada la corrida; los umbrales del semáforo se pueden ajustar en cualquier momento.
       </p>
+      {props.modo === 'diaria' && (
+        <div className="banner banner-info">
+          <b>Operación día a día · tiempo real.</b> No es una simulación: el reloj avanza 1:1 desde la hora de hoy y los pedidos llegan
+          del archivo de ventas y del registro manual. Se cierra con «Detener corrida».
+        </div>
+      )}
       {bloqueado && <div className="banner banner-info">Hay una corrida en curso: los parámetros quedan fijos hasta detenerla (excepto los umbrales del semáforo).</div>}
 
       <div className="grid-2col">
@@ -121,7 +129,9 @@ export default function PantallaParametros(props: Props) {
               const def = config.escenarios.find((x) => x.id === esc);
               setForm({ ...form, escenario: esc, fechaInicio: def ? def.fechaInicioPorDefecto.slice(0, 16) : form.fechaInicio });
             }}>
-              {config.escenarios.map((e) => <option key={e.id} value={e.id}>{e.etiqueta}</option>)}
+              {config.escenarios
+                .filter((e) => (props.modo === 'diaria' ? e.id === 'TIEMPO_REAL' : e.id !== 'TIEMPO_REAL'))
+                .map((e) => <option key={e.id} value={e.id}>{e.etiqueta}</option>)}
             </select>
           </label>
           <label>Fecha/hora de inicio {form.escenario === 'TIEMPO_REAL' && <span className="hint">(por defecto, ahora en Lima)</span>}

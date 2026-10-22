@@ -16,6 +16,8 @@ interface Props {
   ocupado: boolean;
   onIniciar: () => void;
   onDetener: () => void;
+  /** Abre la barra lateral (solo en las pantallas con cabecera). */
+  onMenu?: () => void;
 }
 
 const ESTADO_TEXTO: Record<string, string> = {
@@ -45,7 +47,7 @@ function KpiGlobal({ etiqueta, pct, sem, sub }: { etiqueta: string; pct: number;
  * Encabezado permanente: escenario activo, los 4 tiempos de la rubrica (C12-C16) en un bloque 2x2,
  * los indicadores globales de ocupacion (G01-G04) y los unicos controles de la corrida: iniciar y detener.
  */
-export default function TopBar({ estado, minutoAhora, escenarioTexto, algoritmoTexto, puedeIniciar, ocupado, onIniciar, onDetener }: Props) {
+export default function TopBar({ estado, minutoAhora, escenarioTexto, algoritmoTexto, puedeIniciar, ocupado, onIniciar, onDetener, onMenu }: Props) {
   const [, setTic] = useState(0);
   // la hora actual solo existe en el navegador: se muestra despues de montar para no desajustar la pagina estatica
   const [montado, setMontado] = useState(false);
@@ -99,6 +101,7 @@ export default function TopBar({ estado, minutoAhora, escenarioTexto, algoritmoT
 
   return (
     <header className="topbar">
+      {onMenu && <button className="btn-menu" type="button" aria-label="Abrir menú" title="Menú" onClick={onMenu}>☰</button>}
       <div className="topbar-left">
         <div className="brand">PaqRap</div>
         <div className="scenario">

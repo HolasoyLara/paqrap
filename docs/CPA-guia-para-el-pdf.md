@@ -58,7 +58,7 @@ Valores límite que conviene probar: X = 0, 70 · Y = 0, 50 · cantidad = 1, 100
 
 | Variable | Clases válidas | Clases inválidas |
 |---|---|---|
-| Escenario | V1: Simulación 5D · V2: Día a día · V3: Colapso logístico | — (lista cerrada) |
+| Escenario (modo de la barra lateral) | V1: Simulación 5D · V2: Colapso logístico (modo «Simulación») · V3: Operación día a día en tiempo real (modo «Operación día a día», no es simulación) | — (lista cerrada: cada modo muestra solo sus escenarios) |
 | Fecha de inicio | V4: fecha con archivos de ventas disponibles (2026-01 a 2028-12) · V5: fecha que cruza de mes (p. ej. 30/09) con 2 archivos subidos | I1: mes sin archivo de ventas · I2: día del periodo sin pedidos (el sistema **advierte**) |
 | Duración objetivo (min reales) | V6: 30 a 60 | I3: menor que 30 · I4: mayor que 60 (el sistema corrige al rango) |
 | Días del periodo | V7: 1 a 30 (por defecto 5) | I5: 0 o mayor que 30 |
@@ -141,7 +141,8 @@ trazabilidad del pedido; el mapa muestra el vehículo averiado en gris.
 
 | ID | Clase | Entrada | Resultado esperado | Req. |
 |---|---|---|---|---|
-| CP-26 | — | Abrir Panorama con la corrida en curso | El mapa ocupa toda la pantalla; métricas, leyenda y filtros están recogidos al inicio | C1 C2 C16 |
+| CP-26 | — | Abrir Panorama con la corrida en curso | El mapa ocupa toda la pantalla, sin cabecera ni pestañas; métricas, leyenda y filtros están recogidos al inicio | C1 C2 C16 |
+| CP-26b | — | Abrir la barra lateral (☰) y cambiar entre «Simulación» y «Operación día a día» | La barra se oculta con un clic; en «Simulación» Parámetros solo lista 5D y colapso; en «Operación día a día» el escenario es tiempo real | B18 B19 B20 |
 | CP-27 | — | Pasar el mouse sobre un almacén intermedio | Muestra stock en números y %, semáforo, unidades en el almacén y unidades que arriban | C7 C8 C9 C10 (criterios 7, 8 y 11 de la rúbrica) |
 | CP-28 | — | Clic en un vehículo | Se abre el **panel lateral** (no tapa el mapa) con carga, ruta y pedidos | C17 C18 C19 (panel lateral, rúbrica del mapa) |
 | CP-29 | V6 | Abrir un vehículo antes de su hora de comida | No aparece la fila «Pausa de alimentación» | D4 D5 |
