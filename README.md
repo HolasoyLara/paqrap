@@ -254,7 +254,7 @@ Vercel solo ejecuta el visualizador Next.js; **la API Java se publica aparte** (
 - **Actualizar:** vuelva a ejecutar el script.
 - **Eliminar:** `aws cloudformation delete-stack --stack-name paqrap` y luego borre el repositorio ECR. El balanceador y Fargate generan costo mientras existan.
 
-**Opción C (recomendada para cuenta student): una sola instancia EC2, sin Docker ni roles IAM en su PC.**, con `DESPLEGAR-AWS-EC2.bat` (o `deploy/aws/desplegar-ec2.ps1`).
+**Opción C (recomendada para cuenta student): una sola instancia EC2, sin Docker ni roles IAM en su PC.**, con `DESPLEGAR-AWS-EC2.bat` (Windows), `deploy/aws/desplegar-ec2.ps1` o `bash deploy/aws/desplegar-ec2.sh` (Linux/macOS). **Solo necesita las credenciales de AWS CLI**: el script crea toda la infraestructura, toma el repositorio del `origin` local, espera a que la aplicación responda y muestra la URL. Parámetros opcionales: `-RepoUrl`, `-Rama` (por defecto `main`: **despliega lo que esté en esa rama de GitHub**, así que suba antes sus cambios), `-TipoInstancia`, `-Region`, `-Pila`.
 
 - **Requisitos:** AWS CLI v2 con credenciales vigentes (`aws configure`) y el proyecto subido a un repositorio **público** de GitHub.
 - **Qué hace:** crea la pila `paqrap-ec2` (`deploy/aws/paqrap-ec2.yml`): VPC pública mínima, un grupo de seguridad con el puerto 80 y una instancia EC2 `t3.small`. La instancia clona el repositorio, agrega 2 GB de swap, construye la imagen con Docker Compose y la publica en el puerto 80.
