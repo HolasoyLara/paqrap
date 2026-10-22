@@ -48,8 +48,22 @@ public record EstadoVisual(
                        int pedidosSinUnidad) {
     }
 
+    /**
+     * Almacen en el mapa. Campos agregados para la rubrica (E18-E22): partes en rutas que ya salieron de este
+     * almacen, partes asignadas que aun no salen (con su minuto de salida) y entregas de las ultimas 24 h simuladas.
+     */
     public record AlmacenVisual(String id, String nombre, double x, double y, boolean central, Integer capacidad,
-                                Integer stock, List<String> arriban) {
+                                Integer stock, List<String> arriban, int pedidosEnTransito, List<PedidoHora> porSalir,
+                                List<PedidoHora> entregados) {
+    }
+
+    /** Pedido con un minuto simulado asociado (salida prevista o entrega). */
+    public record PedidoHora(String pedido, double minuto) {
+    }
+
+    /** Parte de un pedido (E31): unidad y ruta que la llevan, almacen de salida y horas en minutos simulados. */
+    public record ParteVisual(String id, String vehiculo, String ruta, String almacen, int cantidad, Double salidaMin,
+                              Double llegadaMin, String estado) {
     }
 
     /**
@@ -67,7 +81,8 @@ public record EstadoVisual(
     }
 
     public record PedidoVisual(String id, double x, double y, int cantidad, double plazo, double registroMin,
-                               double limiteMin, String estado, String vehiculos, boolean reprogramado, String cliente) {
+                               double limiteMin, String estado, String vehiculos, boolean reprogramado, String cliente,
+                               List<ParteVisual> partes) {
     }
 
     public record BloqueoVisual(String id, double[] puntos, double inicioMin, double finMin) {

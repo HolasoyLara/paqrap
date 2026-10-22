@@ -519,10 +519,24 @@ public class MotorSimulacion {
         unidadesEntregadas += parte.getCantidadUnidades();
         if (s == null) return;
         s.registrarEntrega(parte, p.getHoraLlegada(), vs.getId());
+        registrarEntregaReciente(vs, parte, p.getHoraLlegada());
         if (s.estaEntregado() && activos.remove(s.getIdPedido()) != null) {
             entregados++;
             if (s.fueEntregadoATiempo()) entregadosATiempo++; else entregadosTarde++;
         }
+    }
+
+    /** Solo para el visualizador (E22): entregas de las ultimas 24 h simuladas, por almacen de salida. No afecta la simulacion. */
+    private record EntregaReciente(String almacen, String pedido, double hora) {
+    }
+
+    private final Deque<EntregaReciente> entregasRecientes = new ArrayDeque<>();
+
+    private void registrarEntregaReciente(VehiculoSim vs, Pedido parte, double hora) {
+        RutaEnCurso r = vs.getRuta();
+        if (r == null) return;
+        entregasRecientes.addLast(new EntregaReciente(r.getAlmacenSalida().getIdAlmacen(), parte.getIdPedidoOrigen(), hora));
+        while (!entregasRecientes.isEmpty() && entregasRecientes.peekFirst().hora() < hora - 24.0) entregasRecientes.pollFirst();
     }
 
     private void terminarRuta(VehiculoSim vs, RutaEnCurso r) {
@@ -1363,22 +1377,49 @@ public class MotorSimulacion {
         try {
             double t = horaActual;
             Map<Pedido, String> vehiculoDeParte = new HashMap<>();
+            // E31: unidad, ruta y horas de cada parte que va en una ruta
+            Map<Pedido, EstadoVisual.ParteVisual> parteEnRuta = new HashMap<>();
             for (VehiculoSim vs : vehiculos) {
                 RutaEnCurso r = vs.getRuta();
                 if (r == null) continue;
-                for (ParadaEnCurso p : r.getParadas()) if (p.estaPendiente()) vehiculoDeParte.put(p.getParte(), vs.getId());
+                for (ParadaEnCurso p : r.getParadas()) {
+                    if (!p.estaPendiente()) continue;
+                    Pedido parte = p.getParte();
+                    vehiculoDeParte.put(parte, vs.getId());
+                    parteEnRuta.put(parte, new EstadoVisual.ParteVisual(parte.getIdPedido(), vs.getId(), r.getIdRuta(),
+                            r.getAlmacenSalida().getNombre(), parte.getCantidadUnidades(), minutos(r.getHoraInicio()),
+                            minutos(p.getHoraLlegada()), r.getHoraInicio() <= t ? "En ruta" : "Por salir"));
+                }
             }
 
             List<EstadoVisual.AlmacenVisual> listaAlmacenes = new ArrayList<>();
             for (Almacen a : almacenes) {
                 // unidades en ruta que regresan a este almacen, con su hora estimada de llegada
                 List<String> arriban = new ArrayList<>();
+                // E20-E21: partes en transito desde este almacen y partes asignadas que aun no salen
+                int enTransito = 0;
+                List<EstadoVisual.PedidoHora> porSalir = new ArrayList<>();
                 for (VehiculoSim vs : vehiculos) {
                     RutaEnCurso r = vs.getRuta();
-                    if (r != null && r.getAlmacenRetorno() == a) arriban.add(vs.getId() + " · " + fecha(r.getHoraRegreso()));
+                    if (r == null) continue;
+                    if (r.getAlmacenRetorno() == a) arriban.add(vs.getId() + " · " + fecha(r.getHoraRegreso()));
+                    if (r.getAlmacenSalida() != a) continue;
+                    for (ParadaEnCurso p : r.getParadas()) {
+                        if (!p.estaPendiente()) continue;
+                        if (r.getHoraInicio() <= t) enTransito++;
+                        else porSalir.add(new EstadoVisual.PedidoHora(p.getParte().getIdPedidoOrigen(), minutos(r.getHoraInicio())));
+                    }
+                }
+                // E22: entregas de las ultimas 24 h simuladas cuyas rutas salieron de este almacen
+                List<EstadoVisual.PedidoHora> entregadosAlmacen = new ArrayList<>();
+                for (EntregaReciente e : entregasRecientes) {
+                    if (e.almacen().equals(a.getIdAlmacen()) && e.hora() >= t - 24.0) {
+                        entregadosAlmacen.add(new EstadoVisual.PedidoHora(e.pedido(), minutos(e.hora())));
+                    }
                 }
                 listaAlmacenes.add(new EstadoVisual.AlmacenVisual(a.getIdAlmacen(), a.getNombre(), a.getUbicacion().x(), a.getUbicacion().y(),
-                        a.esCentral(), a.esCentral() ? null : a.getCapacidad(), a.esCentral() ? null : a.getInventarioActual(), arriban));
+                        a.esCentral(), a.esCentral() ? null : a.getCapacidad(), a.esCentral() ? null : a.getInventarioActual(), arriban,
+                        enTransito, porSalir, entregadosAlmacen));
             }
 
             List<EstadoVisual.VehiculoVisual> listaVehiculos = new ArrayList<>();
@@ -1442,13 +1483,18 @@ public class MotorSimulacion {
                 if (enRuta) enCurso++; else pendientesCount++;
                 if (s.esIncumplido(t)) incumplidosActivos++;
                 List<String> enVehiculos = new ArrayList<>();
+                List<EstadoVisual.ParteVisual> partes = new ArrayList<>();
                 for (Pedido p : s.getPartesActivas()) {
                     String idv = vehiculoDeParte.get(p);
                     if (idv != null && !enVehiculos.contains(idv)) enVehiculos.add(idv);
+                    EstadoVisual.ParteVisual pv = parteEnRuta.get(p);
+                    partes.add(pv != null ? pv : new EstadoVisual.ParteVisual(p.getIdPedido(), null, null, null,
+                            p.getCantidadUnidades(), null, null, p.getEstado().getEtiqueta()));
                 }
                 listaPedidos.add(new EstadoVisual.PedidoVisual(s.getIdPedido(), s.getUbicacion().x(), s.getUbicacion().y(),
                         s.getCantidadUnidades(), s.getPlazoHoras(), minutos(s.getHoraRegistro()), minutos(s.getHoraLimite()),
-                        s.getEstado().getEtiqueta(), String.join(", ", enVehiculos), s.esIncumplido(t), s.getCliente().getIdCliente()));
+                        s.getEstado().getEtiqueta(), String.join(", ", enVehiculos), s.esIncumplido(t), s.getCliente().getIdCliente(),
+                        partes));
             }
 
             List<EstadoVisual.BloqueoVisual> listaBloqueos = new ArrayList<>();

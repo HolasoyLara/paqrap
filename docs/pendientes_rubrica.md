@@ -10,8 +10,8 @@ Estado: ⬜ pendiente · 🔄 en curso · ✅ hecho
 | 1. Solo frontend: tiempos, semáforo de ocupación, KPI globales, tramos, español | C12–C16, C21, C27, C28, G01–G04, B11, C07 | ✅ |
 | 2. Backend + frontend: averías por tipo y horarios de la UT | D10–D13 (+ datos para E06, E13) | ✅ |
 | 3. Panel izquierdo: pestaña Transporte, filtros de semáforo, rutas de pedido | E01–E07, E13–E15, F01, F03, F07, F08, F15, F16 | ✅ |
-| 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | 🔄 |
-| 5. Cierre con la última planificación | G08–G10 | ⬜ |
+| 4. Pestañas Almacenes y Envíos | E18–E22, E31, F05, F06, F09 | ✅ |
+| 5. Cierre con la última planificación | G08–G10 | 🔄 |
 | 6. Mejoras P2 (si hay tiempo) | C30, C08, C05 | ⬜ |
 
 ## Detalle por fase
@@ -46,8 +46,19 @@ Hecho:
 - `ModalDetalle.tsx` + `page.tsx`: botón «Ver ruta en el mapa» en el detalle del pedido (cambia a Panorama, centra y resalta, aunque se venga de la pestaña Pedidos); muestra `rutas`.
 - Limitación: si el pedido aún no tiene unidad, solo se centra el destino (no se dibuja la línea desde el almacén).
 
-### Fase 4
-Archivos: `EstadoVisual.java` (AlmacenVisual, PedidoVisual), `MotorSimulacion.java`, `PanelListas.tsx`, `ModalDetalle.tsx`.
+### Fase 4 ✅
+Hecho:
+- `EstadoVisual.java`:
+  - `AlmacenVisual` + `pedidosEnTransito`, `porSalir` y `entregados` (records `PedidoHora{pedido, minuto}`);
+  - `PedidoVisual` + `partes` (record `ParteVisual{id, vehiculo, ruta, almacen, cantidad, salidaMin, llegadaMin, estado}`). Solo se agregaron campos.
+- `MotorSimulacion.java`: los llena en `construirEstadoVisual`. Para «entregados» se agregó un registro solo de salida (`entregasRecientes`, últimas 24 h), alimentado en `entregar()`; no cambia la simulación.
+- `PanelListas.tsx`:
+  - **Almacenes**: ocupación n/cap (%), píldora, en tránsito, por salir en las próximas x h y entregados en las últimas x h (selector 1/2/4/8 h); el central dice «Sin límite»; detalle desplegable con los pedidos. Clic → centra y abre el detalle (F05); clic en el mapa → resalta la fila (F06).
+  - **Envíos**: una fila por pedido activo (destino, paquetes, semáforo de plazo, estado, unidades) que se despliega por parte (unidad, ruta, almacén → destino, cantidad, salida y llegada). Clic → centra la unidad que lo lleva o, si está pendiente, el destino (F09).
+- Detalle del pedido: muestra `partes` y `rutas` (fase 3).
+- Limitaciones:
+  - un pedido pendiente aún no tiene almacén de origen (lo decide el planificador), así que F09 centra el destino;
+  - la lista de envíos muestra solo los pedidos activos (los entregados están en la pestaña Pedidos), hasta 300 filas, con buscador.
 
 ### Fase 5
 Archivos: `CierreCorrida.java`, `MotorSimulacion.java` (generarCierre), `api/ReportesCsv.java`, `PantallaCierre.tsx`, `tipos.ts`.
